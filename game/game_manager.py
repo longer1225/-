@@ -15,6 +15,7 @@ class GameManager:
         self.current_round = 0
         self.board = None  # Board 对象，稍后初始化
         self.small_rounds_won = {player.name: 0 for player in players}  # 小局胜利记录
+        self.prev_round_winner = None  # 记录上一小局的胜者
 
     def setup_board(self):
         """
@@ -45,21 +46,30 @@ class GameManager:
     def play_small_round(self):
         """
         小局流程：
-        1. 发牌（第一小局发6张，之后每小局发2张）
+        1. 发牌
         2. 玩家轮流出牌
         3. 小局计分
         """
         self.deal_cards()
-        # TODO: 玩家轮流出牌逻辑，可以通过 UI 或命令行触发 play_card()
-        # 这里先留空或用模拟逻辑
+        # TODO: 玩家轮流出牌逻辑
 
         # 计算小局分数
         scores = {player.name: player.calculate_score() for player in self.players}
         print(f"小局得分: {scores}")
+
         # 判定小局胜利者
-        winner = max(scores, key=scores.get)
-        self.small_rounds_won[winner] += 1
-        print(f"{winner} 赢得本小局！")
+        max_score = max(scores.values())
+        winners = [player for player in self.players if player.score == max_score]
+
+        # 更新每个玩家的上一小局胜负状态
+        for player in self.players:
+            player.prev_round_won = player in winners
+
+        # 打印胜者
+        if len(winners) == 1:
+            print(f"{winners[0].name} 赢得本小局！")
+        else:
+            print(f"本小局平局，胜者: {[p.name for p in winners]}")
 
     def deal_cards(self):
         """

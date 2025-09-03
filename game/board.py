@@ -41,8 +41,9 @@ class Board:
 
     def show_board(self):
         """
-        打印所有玩家的战场和孤立区状态
+        打印所有玩家的战场、孤立区和手牌状态
         """
         for player in self.players:
+            print(f"{player.name} 手牌: {[card.name for card in player.hand]}")
             print(f"{player.name} 战场牌: {[card.name for card in self.board_zone[player.name]]}")
             print(f"{player.name} 孤立牌: {[card.name for card in self.isolated_zone[player.name]]}")

@@ -10,6 +10,7 @@ class Player:
         self.board_cards = []    # 场上牌列表
         self.isolated_cards = [] # 孤立牌列表
         self.score = 0           # 玩家分数
+        self.prev_round_won = False  # 上一小局是否获胜
 
     def draw_card(self, card):
         """

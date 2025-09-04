@@ -84,9 +84,17 @@ class GameManager:
 
         for player in self.players:
             for _ in range(num_cards):
-                card_number = random.randint(1, 20)  # 假设有1-20号牌
-                card = create_card_by_number(card_number)
+                card = self.draw_card_for_player(player)
                 player.draw_card(card)
+
+    def draw_card_for_player(self, player):
+        """
+        无限牌堆：每次随机生成一张牌
+        """
+        card_number = random.randint(1, 20)  # 假设有 1-20 号牌
+        card = create_card_by_number(card_number)
+        print(f"{player.name} 抽到 {card.name}")
+        return card
 
     def show_winner(self):
         """

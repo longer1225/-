@@ -15,7 +15,6 @@ class GameManager:
         self.current_round = 0
         self.board = None  # Board 对象，稍后初始化
         self.small_rounds_won = {player.name: 0 for player in players}  # 小局胜利记录
-        self.prev_round_winner = None  # 记录上一小局的胜者
 
     def setup_board(self):
         """
@@ -38,7 +37,7 @@ class GameManager:
         """
         while max(self.small_rounds_won.values()) < (self.total_rounds // 2 + 1):
             self.current_round += 1
-            print(f"=== 第 {self.current_round} 小局 ===")
+            print(f"\n=== 第 {self.current_round} 小局 ===")
             self.play_small_round()
 
         self.show_winner()
@@ -47,11 +46,12 @@ class GameManager:
         """
         小局流程：
         1. 发牌
-        2. 玩家轮流出牌
+        2. 玩家轮流出牌（由 UI 或事件控制）
         3. 小局计分
         """
         self.deal_cards()
-        # TODO: 玩家轮流出牌逻辑
+
+        # TODO: 玩家轮流出牌逻辑，由 UI 或交互事件触发 Player.play_card()
 
         # 计算小局分数
         scores = {player.name: player.calculate_score() for player in self.players}
@@ -68,6 +68,7 @@ class GameManager:
         # 打印胜者
         if len(winners) == 1:
             print(f"{winners[0].name} 赢得本小局！")
+            self.small_rounds_won[winners[0].name] += 1
         else:
             print(f"本小局平局，胜者: {[p.name for p in winners]}")
 
@@ -111,5 +112,7 @@ class GameManager:
         """
         调试/渲染接口
         """
-        if self.board:
-            self.board.show_board()
+        for player in self.players:
+            print(f"{player.name} 手牌: {[c.name for c in player.hand]}")
+            print(f"{player.name} 战场牌: {[c.name for c in player.board_cards]}")
+            print(f"{player.name} 孤立牌: {[c.name for c in player.isolated_cards]}")

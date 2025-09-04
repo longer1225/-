@@ -6,44 +6,23 @@ class Board:
         初始化战场
         :param players: 玩家列表（Player 对象）
         """
-        self.players = players
-
-        # 每个玩家对应的牌区
-        # 格式：{player_name: [Card, Card, ...]}
-        self.board_zone = {player.name: [] for player in players}      # 战场牌
-        self.isolated_zone = {player.name: [] for player in players}   # 孤立牌
-
-    def add_to_board(self, player, card):
-        """
-        将非孤立牌放入战场区
-        """
-        self.board_zone[player.name].append(card)
-        print(f"{player.name} 将 {card.name} 放入战场")
-
-    def add_to_isolated(self, player, card):
-        """
-        将孤立牌放入孤立区
-        """
-        self.isolated_zone[player.name].append(card)
-        print(f"{player.name} 将 {card.name} 放入孤立区")
-
-    def get_player_board(self, player):
-        """
-        获取玩家的战场牌
-        """
-        return self.board_zone.get(player.name, [])
-
-    def get_player_isolated(self, player):
-        """
-        获取玩家的孤立牌
-        """
-        return self.isolated_zone.get(player.name, [])
+        self.players = players  # 只保存玩家对象列表
 
     def show_board(self):
         """
-        打印所有玩家的战场、孤立区和手牌状态
+        打印所有玩家的手牌、战场牌和孤立牌状态
         """
         for player in self.players:
-            print(f"{player.name} 手牌: {[card.name for card in player.hand]}")
-            print(f"{player.name} 战场牌: {[card.name for card in self.board_zone[player.name]]}")
-            print(f"{player.name} 孤立牌: {[card.name for card in self.isolated_zone[player.name]]}")
+            # 由 Player 自己管理牌区
+            player.show_hand()
+            player.show_board()
+            player.show_isolated()
+
+    def get_player_by_name(self, name):
+        """
+        根据玩家名字获取玩家对象
+        """
+        for player in self.players:
+            if player.name == name:
+                return player
+        return None

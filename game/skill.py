@@ -1,5 +1,6 @@
 # game/skill.py
 from abc import ABC, abstractmethod
+import random
 
 class Skill(ABC):
     """

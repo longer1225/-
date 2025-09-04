@@ -15,30 +15,43 @@ class Card:
         self.skills = skills or []  # 支持多技能
         self.is_isolated = is_isolated
 
-    def activate_skills(self, owner, board):
+    def activate_skills(self, owner, board=None, target_card=None, targets=None):
         """
         遍历技能列表依次触发
         :param owner: 出牌的玩家对象
-        :param board: 游戏的 Board 对象
+        :param board: 游戏 Board 对象（访问所有玩家）
+        :param target_card: 单目标牌（技能作用对象）
+        :param targets: 多目标牌列表（技能作用对象）
         """
         for skill in self.skills:
-            skill.apply(owner, board)
+            skill.apply(
+                owner=owner,
+                board=board,
+                self_card=self,
+                target_card=target_card,
+                targets=targets
+            )
 
-    def play(self, owner, board):
+    def play(self, owner, board=None, target_card=None, targets=None):
         """
         玩家出牌操作
-        1. 根据 is_isolated 放入 Board 的对应区域
+        1. 根据 is_isolated 放入玩家自己的牌区
         2. 激活技能效果
         :param owner: 出牌的玩家对象
         :param board: 游戏的 Board 对象
+        :param target_card: 单目标牌（技能作用对象）
+        :param targets: 多目标牌列表（技能作用对象）
         """
+        # 放入玩家自己的牌区
         if self.is_isolated:
-            board.add_to_isolated(owner, self)
+            owner.isolated_cards.append(self)
+            print(f"{owner.name} 将 {self.name} 放入孤立区")
         else:
-            board.add_to_board(owner, self)
+            owner.board_cards.append(self)
+            print(f"{owner.name} 将 {self.name} 放入战场")
 
         # 触发技能
-        self.activate_skills(owner, board)
+        self.activate_skills(owner=owner, board=board, target_card=target_card, targets=targets)
 
     def info(self):
         """

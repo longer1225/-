@@ -31,20 +31,13 @@ class Player:
             return
 
         self.hand.remove(card)
-        card.play(owner=self, board=board)
-
-        # 自动更新场上和孤立区
-        if card.is_isolated:
-            self.isolated_cards.append(card)
-        else:
-            self.board_cards.append(card)
-
+        card.play(owner=self, board=board, target_card=target_card, targets=targets)
     def calculate_score(self):
         """
         计算当前分数：战场牌 + 孤立牌点数之和
         """
         total = sum(card.points for card in self.board_cards + self.isolated_cards)
-        self.score = total
+        self.score += total
         return self.score
 
     def show_hand(self):

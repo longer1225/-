@@ -15,32 +15,33 @@ class Card:
         self.skills = skills or []  # 支持多技能
         self.is_isolated = is_isolated
 
-    def activate_skills(self, owner, board=None, target_card=None, targets=None):
+    def activate_skills(self, owner, board=None):
         """
         遍历技能列表依次触发
+        技能内部决定是否需要玩家选择目标
         :param owner: 出牌的玩家对象
         :param board: 游戏 Board 对象（访问所有玩家）
-        :param target_card: 单目标牌（技能作用对象）
-        :param targets: 多目标牌列表（技能作用对象）
         """
         for skill in self.skills:
-            skill.apply(
-                owner=owner,
-                board=board,
-                self_card=self,
-                target_card=target_card,
-                targets=targets
-            )
+            if getattr(skill, "needs_target", False):
+                # 需要玩家选择目标的技能，调用 UI 获取目标
+                target_card = ui_get_target_card(board)  # UI 弹窗或点击事件
+                skill.apply(owner=owner, board=board, self_card=self, target_card=target_card)
+            elif getattr(skill, "needs_targets", False):
+                # 多目标技能，UI 选择多个目标
+                targets = ui_get_targets(board)  # 返回列表
+                skill.apply(owner=owner, board=board, self_card=self, targets=targets)
+            else:
+                # 无需目标的技能
+                skill.apply(owner=owner, board=board, self_card=self)
 
-    def play(self, owner, board=None, target_card=None, targets=None):
+    def play(self, owner, board=None):
         """
         玩家出牌操作
         1. 根据 is_isolated 放入玩家自己的牌区
         2. 激活技能效果
         :param owner: 出牌的玩家对象
         :param board: 游戏的 Board 对象
-        :param target_card: 单目标牌（技能作用对象）
-        :param targets: 多目标牌列表（技能作用对象）
         """
         # 放入玩家自己的牌区
         if self.is_isolated:
@@ -51,7 +52,7 @@ class Card:
             print(f"{owner.name} 将 {self.name} 放入战场")
 
         # 触发技能
-        self.activate_skills(owner=owner, board=board, target_card=target_card, targets=targets)
+        self.activate_skills(owner=owner, board=board)
 
     def info(self):
         """
@@ -66,3 +67,4 @@ class Card:
 
     def __str__(self):
         return f"Card({self.name}, points={self.points}, isolated={self.is_isolated})"
+

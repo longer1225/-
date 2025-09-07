@@ -3,179 +3,171 @@ import random
 
 # -------------------- 技能基类 --------------------
 class Skill(ABC):
-    """
-    技能抽象基类，所有技能必须继承此类并实现 apply 方法。
-    """
-    targets_required = 0  # 默认不需要目标
+    def __init__(self, name=None, targets_required=0, target_side="self"):
+        """
+        :param name: 技能名称
+        :param targets_required: 需要多少张牌作为目标
+        :param target_side: 目标归属
+            - "self"   只能选择自己
+            - "other"  只能选择其他玩家
+            - "any"    自己和他人都可以
+        """
+        self.name = name or self.__class__.__name__
+        self.targets_required = targets_required
+        self.target_side = target_side
 
     @property
     def needs_target(self):
-        """是否需要目标"""
         return self.targets_required > 0
 
-    def debug(self, message):
-        print(f"[技能 {self}] {message}")
-
-    def validate_targets(self, targets):
+    def validate_targets(self, action):
         if self.targets_required == 0:
             return []
-        if not targets or len(targets) < self.targets_required:
-            raise ValueError(f"{self} 技能需要 {self.targets_required} 个目标，但提供了 {targets}")
-        return targets
+        if not action.targets or len(action.targets) < self.targets_required:
+            raise ValueError(f"{self.name} 需要 {self.targets_required} 个目标，但传入 {action.targets}")
+        return action.targets
 
     @abstractmethod
-    def apply(self, owner=None, board=None, self_card=None, targets=None):
+    def apply(self, action):
         """技能生效逻辑"""
         pass
 
     def __str__(self):
-        return self.__class__.__name__
+        return self.name
 
 
 # -------------------- 技能实现 --------------------
 
 class Skill_1(Skill):
     """本牌上场时，根据己方场上牌数给自己加分"""
-    def apply(self, owner=None, board=None, self_card=None, targets=None):
-        cards_on_board = board.get_player_board(owner)
-        self_card.points += len(cards_on_board)
-        self.debug(f"{self_card.name} 点数增加到 {self_card.points}")
+    def __init__(self):
+        super().__init__("场上加点", targets_required=0, target_side="self")
+
+    def apply(self, action):
+        cards_on_board = action.board.get_player_board(action.owner)
+        action.self_card.points += len(cards_on_board)
+        print(f"[{self.name}] {action.self_card.name} 点数增加到 {action.self_card.points}")
 
 
 class Skill_2(Skill):
     """如果自己战场上只有这张牌，则给这张牌加5点"""
-    def apply(self, owner=None, board=None, self_card=None, targets=None):
-        cards_on_board = board.get_player_board(owner)
-        if len(cards_on_board) == 1 and cards_on_board[0] == self_card:
-            self_card.points += 5
-            self.debug(f"{self_card.name} 点数增加到 {self_card.points}")
+    def __init__(self):
+        super().__init__("孤胆勇士", targets_required=0, target_side="self")
+
+    def apply(self, action):
+        cards_on_board = action.board.get_player_board(action.owner)
+        if len(cards_on_board) == 1 and cards_on_board[0] == action.self_card:
+            action.self_card.points += 5
+            print(f"[{self.name}] {action.self_card.name} 点数增加到 {action.self_card.points}")
 
 
 class Skill_3(Skill):
     """给场上指定的一张牌加2点"""
-    targets_required = 1
-    def apply(self, owner=None, board=None, self_card=None, targets=None):
-        targets = self.validate_targets(targets)
-        target_card = targets[0]
+    def __init__(self):
+        super().__init__("援助", targets_required=1, target_side="any")
+
+    def apply(self, action):
+        target_card = self.validate_targets(action)[0]
         target_card.points += 2
-        self.debug(f"{target_card.name} 被加2点，现在 {target_card.points}")
+        print(f"[{self.name}] {target_card.name} 被加2点，现在 {target_card.points}")
 
 
 class Skill_4(Skill):
     """如果上一小局玩家获胜，则该玩家得分增加固定分数"""
     def __init__(self, points=3):
+        super().__init__("胜利加分", targets_required=0, target_side="self")
         self.points = points
 
-    def apply(self, owner=None, board=None, self_card=None, targets=None):
-        if getattr(owner, "prev_round_won", False):
-            owner.score += self.points
-            self.debug(f"{owner.name} 得分 +{self.points}，总分 {owner.score}")
+    def apply(self, action):
+        if getattr(action.owner, "prev_round_won", False):
+            action.owner.score += self.points
+            print(f"[{self.name}] {action.owner.name} 得分 +{self.points}，总分 {action.owner.score}")
 
 
 class Skill_5(Skill):
     """上一回合输的玩家得到 +3 分"""
-    def apply(self, owner=None, board=None, self_card=None, targets=None):
-        for player in board.players:
+    def __init__(self):
+        super().__init__("安慰奖", targets_required=0, target_side="any")
+
+    def apply(self, action):
+        for player in action.board.players:
             if not getattr(player, "prev_round_won", False):
                 player.score += 3
-                self.debug(f"{player.name} 输家加3分，总分 {player.score}")
+                print(f"[{self.name}] {player.name} 输家加3分，总分 {player.score}")
 
 
 class Skill_6(Skill):
     """抽取一张牌到手牌区"""
-    def apply(self, owner=None, board=None, self_card=None, targets=None):
-        new_card = board.manager.draw_card_for_player(owner)
-        owner.hand.append(new_card)
-        self.debug(f"{owner.name} 抽到 {new_card.name}")
+    def __init__(self):
+        super().__init__("摸牌", targets_required=0, target_side="self")
+
+    def apply(self, action):
+        new_card = action.board.manager.draw_card_for_player(action.owner)
+        action.owner.hand.append(new_card)
+        print(f"[{self.name}] {action.owner.name} 抽到 {new_card.name}")
 
 
 class Skill_7(Skill):
     """消灭敌方场上的一张指定牌"""
-    targets_required = 1
-    def apply(self, owner=None, board=None, self_card=None, targets=None):
-        targets = self.validate_targets(targets)
-        target_card = targets[0]
-        for player in board.players:
-            if target_card in board.get_player_board(player):
-                board.get_player_board(player).remove(target_card)
-                self.debug(f"消灭了 {player.name} 的 {target_card.name}")
+    def __init__(self):
+        super().__init__("精准打击", targets_required=1, target_side="other")
+
+    def apply(self, action):
+        target_card = self.validate_targets(action)[0]
+        for player in action.board.players:
+            if target_card in action.board.get_player_board(player):
+                action.board.get_player_board(player).remove(target_card)
+                print(f"[{self.name}] 消灭了 {player.name} 的 {target_card.name}")
                 break
 
 
 class Skill_8(Skill):
     """己方战场已有几张8 → 本牌点数 +3 * 数量"""
-    def apply(self, owner=None, board=None, self_card=None, targets=None):
-        cards_on_board = board.get_player_board(owner)
-        count_8 = sum(1 for c in cards_on_board if c.name == "8" and c != self_card)
+    def __init__(self):
+        super().__init__("同伴羁绊", targets_required=0, target_side="self")
+
+    def apply(self, action):
+        cards_on_board = action.board.get_player_board(action.owner)
+        count_8 = sum(1 for c in cards_on_board if c.name == "8" and c != action.self_card)
         if count_8 > 0:
-            self_card.points += 3 * count_8
-            self.debug(f"{self_card.name} 技能8触发，已有 {count_8} 张8，加点后 {self_card.points}")
+            action.self_card.points += 3 * count_8
+            print(f"[{self.name}] {action.self_card.name} 技能触发，加点后 {action.self_card.points}")
 
 
 class Skill_9(Skill):
     """
-    拼点：选择一个目标玩家
-    - 胜者抽牌
-    - 败者弃牌
+    拼点：选择一个目标玩家 + 一张弃掉的牌
     """
-    targets_required = 2  # [目标玩家, 弃掉的牌]
+    def __init__(self):
+        super().__init__("拼点", targets_required=2, target_side="any")  # [目标玩家, 弃掉的牌]
 
-    def apply(self, owner=None, board=None, self_card=None, targets=None):
-        targets = self.validate_targets(targets)
-        target_player = targets[0]
-        discard_choice = targets[1]
+    def apply(self, action):
+        target_player, discard_choice = self.validate_targets(action)
 
         owner_point = random.randint(1, 6)
         target_point = random.randint(1, 6)
-        self.debug(f"拼点 {owner.name} {owner_point} vs {target_player.name} {target_point}")
+        print(f"[{self.name}] 拼点 {action.owner.name} {owner_point} vs {target_player.name} {target_point}")
 
         if owner_point > target_point:
-            owner.draw_card_random()
+            action.owner.draw_card_random()
             if discard_choice in target_player.hand:
                 target_player.hand.remove(discard_choice)
-                self.debug(f"{target_player.name} 弃掉 {discard_choice.name}")
+                print(f"[{self.name}] {target_player.name} 弃掉 {discard_choice.name}")
         elif owner_point < target_point:
             target_player.draw_card_random()
-            if discard_choice in owner.hand:
-                owner.hand.remove(discard_choice)
-                self.debug(f"{owner.name} 弃掉 {discard_choice.name}")
+            if discard_choice in action.owner.hand:
+                action.owner.hand.remove(discard_choice)
+                print(f"[{self.name}] {action.owner.name} 弃掉 {discard_choice.name}")
         else:
-            self.debug("拼点平局，无事发生")
+            print(f"[{self.name}] 拼点平局，无事发生")
 
 
 class Skill_10(Skill):
     """出牌时给自己增加 1-6 的随机点数"""
-    def apply(self, owner=None, board=None, self_card=None, targets=None):
+    def __init__(self):
+        super().__init__("随机加点", targets_required=0, target_side="self")
+
+    def apply(self, action):
         rand_points = random.randint(1, 6)
-        self_card.points += rand_points
-        self.debug(f"{self_card.name} 随机加 {rand_points} 点，现在 {self_card.points}")
-
-
-# -------------------- 通用技能 --------------------
-
-class SkillDestroyEnemy(Skill):
-    """消灭敌方场上一张牌"""
-    targets_required = 1
-    def apply(self, owner=None, board=None, self_card=None, targets=None):
-        targets = self.validate_targets(targets)
-        target_card = targets[0]
-        for player in board.players:
-            if target_card in board.get_player_board(player):
-                board.get_player_board(player).remove(target_card)
-                self.debug(f"消灭了 {player.name} 的 {target_card.name}")
-                break
-
-
-class SkillDrawCard(Skill):
-    """玩家抽一张牌（可指定目标玩家抽）"""
-    targets_required = 0
-    def apply(self, owner=None, board=None, self_card=None, targets=None):
-        if not targets:
-            owner.draw_card_random()
-            self.debug(f"{owner.name} 抽到一张牌")
-        else:
-            for target_player in targets:
-                if target_player.hand:
-                    card = target_player.hand.pop(0)
-                    owner.hand.append(card)
-                    self.debug(f"{owner.name} 从 {target_player.name} 抽到 {card.name}")
+        action.self_card.points += rand_points
+        print(f"[{self.name}] {action.self_card.name} 随机加 {rand_points} 点，现在 {action.self_card.points}")

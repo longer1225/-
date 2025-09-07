@@ -26,3 +26,9 @@ class Board:
             if player.name == name:
                 return player
         return None
+
+    def get_player_board(self, player):
+        """
+        获取指定玩家的战场牌列表
+        """
+        return player.board_cards

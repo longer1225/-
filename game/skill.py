@@ -1,3 +1,4 @@
+
 from abc import ABC, abstractmethod
 import random
 
@@ -5,7 +6,7 @@ class Skill(ABC):
     """
     技能抽象基类，所有技能必须继承此类并实现 apply 方法。
     """
-    targets_required = 0  # 默认不需要目标
+    targets_required = None  # 默认不需要目标
 
     @abstractmethod
     def apply(self, owner=None, board=None, self_card=None, targets=None):
@@ -157,3 +158,13 @@ class SkillDrawCard(Skill):
                     card = target_player.hand.pop(0)
                     owner.hand.append(card)
                     print(f"{owner.name} 从 {target_player.name} 抽到 {card.name}")
+
+class SkillAddPoint(Skill):
+    """给目标牌加指定点数"""
+    targets_required = 1
+    def __init__(self, points=1):
+        self.points = points
+    def apply(self, owner=None, board=None, self_card=None, targets=None):
+        target_card = targets[0]
+        target_card.points += self.points
+        print(f"{target_card.name} 被加 {self.points} 点，现在 {target_card.points}")

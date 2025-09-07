@@ -1,7 +1,7 @@
 # game/card_factory.py
 
-from card import Card
-from skill import SkillAddPoint, SkillDestroyEnemy, SkillDrawCard
+from .card import Card
+from .skill import SkillAddPoint, SkillDestroyEnemy, SkillDrawCard
 
 # ------------------ 牌号映射表 ------------------
 # 每张牌的点数、孤立状态和技能列表

@@ -12,57 +12,97 @@ class UIManager:
 
     def select_card_from_hand(self, player):
         """
-        玩家从手牌中选择一张牌出牌
+        玩家从手牌中选择一张牌出牌（命令行交互）
         :param player: 当前玩家对象
         :return: 选中的 Card 对象
         """
-        # TODO: 替换成真实点击事件逻辑
         if not player.hand:
+            print("没有手牌可选！")
             return None
-        # 临时示意：选择第一张手牌
-        return player.hand[0]
+        print(f"{player.name} 的手牌：")
+        for idx, card in enumerate(player.hand):
+            print(f"  [{idx}] {card.name} (点数: {getattr(card, 'points', '?')})")
+        while True:
+            try:
+                choice = int(input("请选择要出的牌编号："))
+                if 0 <= choice < len(player.hand):
+                    return player.hand[choice]
+                else:
+                    print("输入超出范围，请重新输入。")
+            except ValueError:
+                print("请输入有效数字。")
 
     def select_target_card(self, player, skill):
         """
-        玩家选择技能作用的单张目标牌
+        玩家选择技能作用的单张目标牌（命令行交互）
         :param player: 当前玩家对象（出牌者）
         :param skill: 当前技能对象
         :return: Card 对象
         """
-        # TODO: 替换成 UI 点击事件逻辑
-        # 示例：遍历所有玩家的战场牌，返回第一个可以选择的牌
+        candidates = []
         for p in self.players:
             if p == player:
-                continue  # 跳过自己，如果技能不能作用于自己
-            if p.board_cards:
-                return p.board_cards[0]
-        return None
+                continue
+            for card in p.board_cards:
+                candidates.append((p, card))
+        if not candidates:
+            print("没有可选目标牌！")
+            return None
+        print("可选目标牌：")
+        for idx, (p, card) in enumerate(candidates):
+            print(f"  [{idx}] {p.name} 的 {card.name} (点数: {getattr(card, 'points', '?')})")
+        while True:
+            try:
+                choice = int(input("请选择目标牌编号："))
+                if 0 <= choice < len(candidates):
+                    return candidates[choice][1]
+                else:
+                    print("输入超出范围，请重新输入。")
+            except ValueError:
+                print("请输入有效数字。")
 
     def select_target_cards(self, player, skill):
         """
-        玩家选择技能作用的多张目标牌
+        玩家选择技能作用的多张目标牌（命令行交互）
         :param player: 当前玩家对象
         :param skill: 当前技能对象
         :return: Card 列表
         """
-        # TODO: 替换成 UI 多选事件逻辑
-        targets = []
+        candidates = []
         for p in self.players:
             if p == player:
                 continue
-            targets.extend(p.board_cards)
-        return targets
+            for card in p.board_cards:
+                candidates.append((p, card))
+        if not candidates:
+            print("没有可选目标牌！")
+            return []
+        print("可选目标牌（用逗号分隔编号，多选）：")
+        for idx, (p, card) in enumerate(candidates):
+            print(f"  [{idx}] {p.name} 的 {card.name} (点数: {getattr(card, 'points', '?')})")
+        while True:
+            try:
+                choices = input("请选择目标牌编号（如0,2,3）：")
+                idxs = [int(x) for x in choices.split(',') if x.strip().isdigit()]
+                if all(0 <= i < len(candidates) for i in idxs):
+                    return [candidates[i][1] for i in idxs]
+                else:
+                    print("输入有误，请重新输入。")
+            except Exception:
+                print("请输入有效编号，用逗号分隔。")
 
     def confirm_action(self, player, action_desc):
         """
-        弹出确认操作提示，例如是否打出牌、是否发动技能
+        弹出确认操作提示，例如是否打出牌、是否发动技能（命令行交互）
         :param player: 当前玩家
         :param action_desc: 描述信息
         :return: True / False
         """
-        # TODO: 替换成真实点击按钮逻辑
-        print(f"{player.name} 确认操作: {action_desc}")
-        return True  # 临时总是返回确认
+        while True:
+            resp = input(f"{player.name}，{action_desc} (y/n)：").strip().lower()
+            if resp in ("y", "yes"): return True
+            if resp in ("n", "no"): return False
+            print("请输入 y 或 n。")
 
     # 示例主流程函数
     def player_turn(self, player):

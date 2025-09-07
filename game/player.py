@@ -12,7 +12,7 @@ class Player:
         self.battlefield_cards = []     # 战场牌列表
         self.isolated_cards = []  # 孤立牌列表
         self.score = 0            # 玩家分数
-        self.wins=0
+        self.wins=0                 # 玩家胜小局数
         self.prev_round_won = False  # 上一小局是否获胜
 
     def draw_card(self, card):
@@ -20,7 +20,7 @@ class Player:
         self.hand.append(card)
         print(f"{self.name} 抽到卡牌 {card.name}")
 
-    def play_card(self, action, board, ui_manager=None):
+    def play_card(self, action):
         """
         出牌：
         1. 从手牌移除
@@ -33,23 +33,9 @@ class Player:
             return
 
         self.hand.remove(card)
-
-        # 技能目标处理（交给 UI）
-        target_card, targets = None, None
-        if ui_manager and card.skills:
-            for skill in card.skills:
-                if getattr(skill, "targets_required", 0) == 1:
-                    target_card = ui_manager.get_target_card(board)
-                elif getattr(skill, "targets_required", 0) > 1:
-                    targets = ui_manager.get_targets(board)
-
         # 出牌 + 技能触发
         card.play(action)
-        # 放入对应牌区
-        if card.is_isolated:
-            self.isolated_cards.append(card)
-        else:
-            self.battlefield_cards.append(card)
+
 
     def calculate_score(self):
         """计算当前分数：战场牌 + 孤立牌点数"""

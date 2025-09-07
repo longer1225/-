@@ -1,7 +1,10 @@
 # game/game_manager.py
 
 import random
-from card_factory import create_card_by_number  # 工厂函数生成卡牌
+from .board import Board
+from .card_factory import create_card_by_number  # 工厂函数生成卡牌
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
 
 class GameManager:
     def __init__(self, players, total_rounds=3):

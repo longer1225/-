@@ -48,7 +48,7 @@ class Card:
             owner.isolated_cards.append(self)
             print(f"{owner.name} 将 {self.name} 放入孤立区")
         else:
-            owner.board_cards.append(self)
+            owner.battlefield_cards.append(self)
             print(f"{owner.name} 将 {self.name} 放入战场")
 
         # 触发技能

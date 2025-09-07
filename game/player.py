@@ -20,13 +20,14 @@ class Player:
         self.hand.append(card)
         print(f"{self.name} 抽到卡牌 {card.name}")
 
-    def play_card(self, card, board, ui_manager=None):
+    def play_card(self, action, board, ui_manager=None):
         """
         出牌：
         1. 从手牌移除
         2. 放入战场或孤立区
         3. 触发技能
         """
+        card = action.self_card
         if card not in self.hand:
             print(f"{self.name} 没有这张卡牌 {card.name}")
             return
@@ -43,8 +44,7 @@ class Player:
                     targets = ui_manager.get_targets(board)
 
         # 出牌 + 技能触发
-        card.play(owner=self, board=board)
-
+        card.play(action)
         # 放入对应牌区
         if card.is_isolated:
             self.isolated_cards.append(card)

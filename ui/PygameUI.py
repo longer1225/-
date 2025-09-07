@@ -1,6 +1,7 @@
 import pygame
 from game.player import Player
 from game.game_manager import GameManager
+from game.play_action import PlayAction
 
 # ------------------ UI 参数 ------------------
 WINDOW_WIDTH = 1200
@@ -77,50 +78,58 @@ class PygameUI:
                 elif self.state == "game" and not self.game_over:
                     self.handle_game_click(x, y)
 
-    # ------------------ 游戏点击 ------------------
     def handle_game_click(self, x, y):
         current_player = self.gm.current_player
 
         # -------------------- 点击手牌 --------------------
-        if not self.selecting_targets:
-            clicked_card = self.check_click_card(x, y)
-            if clicked_card:
-                # 如果卡牌有技能且需要目标，进入选目标模式
-                if getattr(clicked_card, "skills", None) and any(
-                    getattr(skill, "targets_required", 0) > 0 for skill in clicked_card.skills
-                ):
-                    self.selected_card = clicked_card
-                    self.selecting_targets = True
-                    self.target_list = []
-                else:
-                    # 普通出牌，立即出
-                    self.selected_card = clicked_card
-                    self.play_selected_card()
+        clicked_card = self.check_click_card(x, y)
+        if clicked_card:
+            if self.selected_card == clicked_card:
+                self.selected_card = None
+                self.target_list = []
+            else:
+                self.selected_card = clicked_card
+                self.target_list = []
             return
 
-        # -------------------- 选目标阶段 --------------------
-        if self.selecting_targets:
-            target_card = self.check_click_target(x, y)
-            if target_card and target_card not in self.target_list:
-                self.target_list.append(target_card)
-                # 检查是否选满目标
-                if len(self.target_list) >= self.selected_card.max_targets_required():
-                    current_player.play_card(
-                        self.selected_card, self.gm.board, targets=self.target_list
-                    )
-                    # 重置状态
-                    self.selected_card = None
-                    self.selecting_targets = False
-                    self.target_list = []
+        # -------------------- 点击目标牌 --------------------
+        target_card = self.check_click_target(x, y)
+        if target_card and self.selected_card:
+            if target_card in self.target_list:
+                self.target_list.remove(target_card)
+            else:
+                valid = False
+                for skill in self.selected_card.skills:
+                    if skill.targets_required > 0:
+                        if skill.target_type == "self" and target_card in current_player.battlefield + current_player.isolated:
+                            valid = True
+                        elif skill.target_type == "other":
+                            for p in self.gm.players:
+                                if p != current_player and target_card in p.battlefield + p.isolated:
+                                    valid = True
+                if valid:
+                    self.target_list.append(target_card)
 
-        # -------------------- 点击按钮 --------------------
+        # -------------------- 点击出牌按钮 --------------------
+        if self.button_play.collidepoint(x, y) and self.selected_card:
+            max_targets = max((s.targets_required for s in self.selected_card.skills), default=0)
+            if len(self.target_list) >= max_targets:
+                action = PlayAction(owner=current_player, self_card=self.selected_card, board=self.gm.board)
+                for t in self.target_list:
+                    action.add_target(t)
+                current_player.play_card(action, self.gm.board)
+                # 出牌后更新 UI
+                if self.selected_card in current_player.hand:
+                    current_player.hand.remove(self.selected_card)
+                self.selected_card = None
+                self.target_list = []
+
+        # -------------------- 点击结束回合按钮 --------------------
         if self.button_end_turn.collidepoint(x, y):
             self.players_done[self.gm.current_player_index] = True
             self.selected_card = None
-            self.selecting_targets = False
             self.target_list = []
 
-            # 如果所有玩家都结束，则结算小局
             if all(self.players_done):
                 self.round_over = True
                 self.gm.end_round()
@@ -177,19 +186,16 @@ class PygameUI:
         self.screen.blit(self.font.render("结束回合", True, COLOR_TEXT),
                          (self.button_end_turn.x + 20, self.button_end_turn.y + 10))
 
-        # 显示小局胜者
         if self.round_winner:
             winner_text = self.font.render(f"本小局胜者: {self.round_winner}", True, (255, 255, 0))
             self.screen.blit(winner_text, (WINDOW_WIDTH // 2 - 80, 50))
 
-        # 检查大局是否结束
         if any(p.wins >= 2 for p in self.gm.players) and not self.game_over:
             self.game_over = True
             max_wins = max(p.wins for p in self.gm.players)
             winners = [p.name for p in self.gm.players if p.wins == max_wins]
             self.big_winner = ", ".join(winners)
 
-        # 显示大局胜者
         if self.big_winner:
             big_text = self.font.render(f"大局胜者: {self.big_winner}", True, (255, 200, 0))
             self.screen.blit(big_text, (WINDOW_WIDTH // 2 - 80, 20))
@@ -219,7 +225,6 @@ class PygameUI:
             text = self.font.render(card.name, True, (0, 0, 0))
             self.screen.blit(text, (rect.x + 5, rect.y + 5))
 
-    # ------------------ 点击手牌 ------------------
     def check_click_card(self, x, y):
         current_player = self.gm.current_player
         for i, card in enumerate(current_player.hand):
@@ -228,7 +233,6 @@ class PygameUI:
                 return card
         return None
 
-    # ------------------ 点击目标牌 ------------------
     def check_click_target(self, x, y):
         for player in self.gm.players:
             for zone in [player.battlefield, player.isolated]:
@@ -238,16 +242,6 @@ class PygameUI:
                         return card
         return None
 
-    # ------------------ 出牌 ------------------
-    def play_selected_card(self):
-        player = self.gm.current_player
-        if not player.hand or not self.selected_card:
-            return
-        card = self.selected_card
-        player.play_card(card, self.gm.board)
-        self.selected_card = None
-
-    # ------------------ 卡牌位置计算 ------------------
     def get_card_rect(self, i, player_index, zone_type, y=None):
         if zone_type == "hand":
             base_y = 50 + player_index * (ZONE_HEIGHT * 3 + ZONE_MARGIN)
@@ -260,9 +254,7 @@ class PygameUI:
         x = 200 + i * (CARD_WIDTH + CARD_MARGIN)
         return pygame.Rect(x, base_y + 20, CARD_WIDTH, CARD_HEIGHT)
 
-    # ------------------ 目标卡牌位置 ------------------
     def get_card_rect_for_target(self, card, player):
-        """暂时和手牌/战场/孤立区位置一致计算，后续可精确定位"""
         if card in player.hand:
             zone_type = "hand"
             idx = player.hand.index(card)

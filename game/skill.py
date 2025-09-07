@@ -3,7 +3,7 @@ import random
 
 # -------------------- 技能基类 --------------------
 class Skill(ABC):
-    def __init__(self, name=None, targets_required=0, target_side="self"):
+    def __init__(self, name=None, targets_required=0, target_side="self",target_type="hand"):
         """
         :param name: 技能名称
         :param targets_required: 需要多少张牌作为目标
@@ -15,6 +15,7 @@ class Skill(ABC):
         self.name = name or self.__class__.__name__
         self.targets_required = targets_required
         self.target_side = target_side
+        self.target_type = target_type
 
     @property
     def needs_target(self):
@@ -44,7 +45,7 @@ class Skill_1(Skill):
         super().__init__("场上加点", targets_required=0, target_side="self")
 
     def apply(self, action):
-        cards_on_board = action.board.get_player_board(action.owner)
+        cards_on_board = action.board.get_player_zone(action.owner,"battlefield")
         action.self_card.points += len(cards_on_board)
         print(f"[{self.name}] {action.self_card.name} 点数增加到 {action.self_card.points}")
 
@@ -55,7 +56,7 @@ class Skill_2(Skill):
         super().__init__("孤胆勇士", targets_required=0, target_side="self")
 
     def apply(self, action):
-        cards_on_board = action.board.get_player_board(action.owner)
+        cards_on_board = action.board.get_player_zone(action.owner,"battlefield")
         if len(cards_on_board) == 1 and cards_on_board[0] == action.self_card:
             action.self_card.points += 5
             print(f"[{self.name}] {action.self_card.name} 点数增加到 {action.self_card.points}")
@@ -115,8 +116,8 @@ class Skill_7(Skill):
     def apply(self, action):
         target_card = self.validate_targets(action)[0]
         for player in action.board.players:
-            if target_card in action.board.get_player_board(player):
-                action.board.get_player_board(player).remove(target_card)
+            if target_card in action.board.get_player_zone(action.target,"battlefield"):
+                action.board.get_player_zone(player).remove(target_card)
                 print(f"[{self.name}] 消灭了 {player.name} 的 {target_card.name}")
                 break
 
@@ -127,7 +128,7 @@ class Skill_8(Skill):
         super().__init__("同伴羁绊", targets_required=0, target_side="self")
 
     def apply(self, action):
-        cards_on_board = action.board.get_player_board(action.owner)
+        cards_on_board = action.board.get_player_zone(action.owner)
         count_8 = sum(1 for c in cards_on_board if c.name == "8" and c != action.self_card)
         if count_8 > 0:
             action.self_card.points += 3 * count_8

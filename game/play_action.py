@@ -1,7 +1,7 @@
 # game/play_action.py
 
 class PlayAction:
-    def __init__(self, owner, self_card, board):
+    def __init__(self, owner,target,self_card, board):
         """
         封装一次出牌的完整上下文
         :param owner: 出牌的玩家对象
@@ -11,7 +11,8 @@ class PlayAction:
         self.owner = owner
         self.self_card = self_card
         self.board = board
-        self.targets = []  # 技能作用目标（可以是单个或多个）
+        self.target = target  # 技能作用目标玩家（单个）
+        self.targets = []  # 技能作用目标牌（可以是单个或多个）
 
     def add_target(self, target):
         """添加一个目标（UI 点击时调用）"""

@@ -17,16 +17,6 @@ card_data_map = {
     9: {"points": 3, "is_isolated": False, "skills": [Skill_9()]},
     10: {"points": 2, "is_isolated": False, "skills": [Skill_10()]},
     # ---------------- 通用技能卡 ----------------
-    11: {"points": 3, "is_isolated": False, "skills": [SkillDestroyEnemy()]},
-    12: {"points": 1, "is_isolated": False, "skills": [SkillDrawCard()]},
-    13: {"points": 4, "is_isolated": False, "skills": [SkillDestroyEnemy()]},
-    14: {"points": 2, "is_isolated": False, "skills": [SkillDrawCard()]},
-    15: {"points": 5, "is_isolated": False, "skills": [SkillDestroyEnemy()]},
-    16: {"points": 0, "is_isolated": True, "skills": [SkillDrawCard()]},
-    17: {"points": 6, "is_isolated": False, "skills": [SkillDestroyEnemy()]},
-    18: {"points": 1, "is_isolated": False, "skills": [SkillDrawCard()]},
-    19: {"points": 4, "is_isolated": False, "skills": [SkillDestroyEnemy()]},
-    20: {"points": 2, "is_isolated": False, "skills": [SkillDrawCard()]},
 }
 
 # ------------------ 工厂函数 ------------------

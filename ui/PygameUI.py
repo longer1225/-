@@ -114,7 +114,7 @@ class PygameUI:
         if self.button_play.collidepoint(x, y) and self.selected_card:
             max_targets = max((s.targets_required for s in self.selected_card.skills), default=0)
             if len(self.target_list) >= max_targets:
-                action = PlayAction(owner=current_player, self_card=self.selected_card, board=self.gm.board)
+                action = PlayAction(owner=current_player, self_card=self.selected_card, board=self.gm.board,manager=self.gm)
                 for t in self.target_list:
                     action.add_target(t)
                 current_player.play_card(action, self.gm.board)

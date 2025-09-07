@@ -36,7 +36,7 @@ def player_turn_ui(ui, player):
         return None
     if not ui.confirm_action(player, f"是否打出 {card.name}"):
         return None
-    action = PlayAction(player, card)
+    action = PlayAction(player, card,game.board,game)
     # 技能目标收集
     for skill in getattr(card, "skills", []):
         if getattr(skill, "needs_target", False):

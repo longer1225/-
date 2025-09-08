@@ -18,12 +18,13 @@ class GameManager:
         self.current_round = 0
         self.board = None  # Board 对象，稍后初始化
         self.small_rounds_won = {player.name: 0 for player in players}  # 小局胜利记录
+        self.current_player_index = 0 
 
     def setup_board(self):
         """
         初始化战场
         """
-        from board import Board
+        from .board import Board
         self.board = Board(self.players)
 
     def start_game(self):
@@ -125,11 +126,16 @@ class GameManager:
             print(f"{player.name} 孤立牌: {[c.name for c in player.isolated_cards]}")
 
 
-    def show_board(self):
+
+    @property
+    def current_player(self):
         """
-        调试/渲染接口
+        获取当前轮到的玩家
         """
-        for player in self.players:
-            print(f"{player.name} 手牌: {[c.name for c in player.hand]}")
-            print(f"{player.name} 战场牌: {[c.name for c in player.board_cards]}")
-            print(f"{player.name} 孤立牌: {[c.name for c in player.isolated_cards]}")
+        return self.players[self.current_player_index]
+
+    def next_turn(self):
+        """
+        进入下一个玩家回合
+        """
+        self.current_player_index = (self.current_player_index + 1) % len(self.players)

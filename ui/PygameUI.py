@@ -26,6 +26,27 @@ COLOR_TOOLTIP_BORDER = (100, 100, 150)
 
 
 class PygameUI:
+    def wrap_text(self, text, max_width):
+        """
+        按最大宽度自动换行，返回字符串列表。
+        """
+        lines = []
+        if not text:
+            return lines
+        font = self.small_font if hasattr(self, 'small_font') else None
+        words = text.split(' ')
+        current_line = ''
+        for word in words:
+            test_line = current_line + (' ' if current_line else '') + word
+            if font and font.size(test_line)[0] > max_width:
+                if current_line:
+                    lines.append(current_line)
+                current_line = word
+            else:
+                current_line = test_line
+        if current_line:
+            lines.append(current_line)
+        return lines
     def __init__(self, game_manager: GameManager):
         pygame.init()
         self.gm = game_manager
@@ -37,8 +58,9 @@ class PygameUI:
 
         # ------------------ 玩家选牌状态 ------------------
         self.selected_card = None        # 当前选中的手牌
-        self.selecting_targets = False   # 是否在选技能目标阶段
-        self.target_list = []            # 已选择技能目标列表
+        self.selecting_targets = False     # 是否在选敌人阶段
+        self.target_list = [] 
+        self.enemy_list = []          # 已选择技能目标列表
         self.hovered_card = None         # 悬停的卡牌
         self.turn_number = 1             # 当前回合数
         self.phase = "main"              # 游戏阶段
@@ -69,6 +91,8 @@ class PygameUI:
 
         # 帮助界面状态
         self.show_help = False
+        # 新增：用于存储收集到的信息
+        self.collect_info = []
 
     # ------------------ 主循环 ------------------
     def run(self):
@@ -166,12 +190,23 @@ class PygameUI:
                                     valid = True
                 if valid:
                     self.target_list.append(target_card)
+        target_enemy = self.check_click_enemy(x, y)
+        if target_enemy and self.selected_card:
+            if target_enemy in self.enemy_list:
+                self.target_list.remove(target_enemy)
+            else:
+                valid = False
+                if skill.enemies_required > 0:
+                    if target_enemy != current_player and target_enemy in self.gm.players:
+                        valid = True
+                if valid:
+                    self.enemy_list.append(target_enemy)
 
         # -------------------- 点击出牌按钮 --------------------
         if self.button_play.collidepoint(x, y) and self.selected_card:
             max_targets = max((s.targets_required for s in self.selected_card.skills), default=0)
             if len(self.target_list) >= max_targets:
-                action = PlayAction(owner=current_player, self_card=self.selected_card, board=self.gm.board,manager=self.gm)
+                action = PlayAction(owner=current_player, self_card=self.selected_card, board=self.gm.board,manager=self.gm,targets=self.target_list,enemies=self.enemy_list)
                 for t in self.target_list:
                     action.add_target(t)
                 current_player.play_card(action, self.gm.board)
@@ -189,7 +224,6 @@ class PygameUI:
 
             if all(self.players_done):
                 self.round_over = True
-                self.gm.end_round()
                 winners = [p.name for p in self.gm.players if p.prev_round_won or p.wins > 0]
                 self.round_winner = ", ".join(winners)
                 self.players_done = [False] * len(self.gm.players)
@@ -373,6 +407,16 @@ class PygameUI:
                     rect = self.get_card_rect_for_card(card, player)
                     if rect.collidepoint(x, y):
                         return card
+        return None
+
+    def check_click_enemy(self, x, y):
+        # 检查是否点击到玩家头像区域，返回被点击的玩家对象
+        # 头像区域假设为每个玩家左侧的一个矩形
+        for idx, player in enumerate(self.gm.players):
+            base_y = 50 + idx * (ZONE_HEIGHT * 3 + ZONE_MARGIN)
+            avatar_rect = pygame.Rect(20, base_y - 50, 100, 100)  # 头像区域
+            if avatar_rect.collidepoint(x, y):
+                return player
         return None
 
     def get_card_rect(self, i, player_index, zone_type, y=None):

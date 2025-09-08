@@ -96,7 +96,7 @@ class GameManager:
         """
         无限牌堆：每次随机生成一张牌
         """
-        card_number = random.randint(1, 20)  # 假设有 1-20 号牌
+        card_number = random.randint(1, 10)  # 假设有 1-20 号牌
         card = create_card_by_number(card_number)
         print(f"{player.name} 抽到 {card.name}")
         return card

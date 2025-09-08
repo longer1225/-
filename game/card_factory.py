@@ -38,6 +38,6 @@ def create_card_by_number(number: int) -> Card:
 
 # ------------------ 测试 ------------------
 if __name__ == "__main__":
-    for i in range(1, 21):
+    for i in range(1, 11):
         card = create_card_by_number(i)
         print(card.info())

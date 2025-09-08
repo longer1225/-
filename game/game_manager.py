@@ -121,16 +121,9 @@ class GameManager:
     def show_board(self):
         for player in self.players:
             print(f"{player.name} 手牌: {[c.name for c in player.hand]}")
-            print(f"{player.name} 战场牌: {[c.name for c in player.battlefield]}")
-            print(f"{player.name} 孤立牌: {[c.name for c in player.isolated]}")
+            print(f"{player.name} 战场牌: {[c.name for c in player.battlefield_cards]}")
+            print(f"{player.name} 孤立牌: {[c.name for c in player.isolated_cards]}")
 
-    def show_winner(self):
-        """打印大局胜利者"""
-        winners = self.determine_big_winner()
-        if len(winners) == 1:
-            print(f"大局胜利者是 {winners[0]}！")
-        else:
-            print(f"大局平局！胜者: {winners}")
 
     def show_board(self):
         """

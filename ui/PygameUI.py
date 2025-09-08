@@ -119,7 +119,7 @@ class PygameUI:
             
             # 检查战场和孤立区的卡牌
             for player in self.gm.players:
-                for zone in [player.battlefield, player.isolated]:
+                for zone in [player.battlefield_cards, player.isolated_cards]:
                     for card in zone:
                         rect = self.get_card_rect_for_card(card, player)
                         if rect.collidepoint(x, y):
@@ -158,7 +158,7 @@ class PygameUI:
                 valid = False
                 for skill in self.selected_card.skills:
                     if skill.targets_required > 0:
-                        if skill.target_type == "self" and target_card in current_player.battlefield + current_player.isolated:
+                        if skill.target_type == "self" and target_card in current_player.battlefield_cards + current_player.isolated_cards:
                             valid = True
                         elif skill.target_type == "other":
                             for p in self.gm.players:
@@ -292,7 +292,7 @@ class PygameUI:
         # 绘制选择的目标反馈
         for target_card in self.target_list:
             for player in self.gm.players:
-                if target_card in player.battlefield + player.isolated + player.hand:
+                if target_card in player.battlefield_cards + player.isolated_cards + player.hand:
                     rect = self.get_card_rect_for_card(target_card, player)
                     pygame.draw.rect(self.screen, (255, 100, 100), rect, 3)
 
@@ -340,8 +340,8 @@ class PygameUI:
         border_color = COLOR_CURRENT if highlight else COLOR_ZONE
         pygame.draw.rect(self.screen, border_color, (140, base_y - 30, WINDOW_WIDTH - 280, ZONE_HEIGHT * 3 + 30), 2)
         self.draw_zone("手牌", player.hand, idx, "hand", base_y)
-        self.draw_zone("战场", player.battlefield, idx, "battlefield", base_y + ZONE_HEIGHT + 10)
-        self.draw_zone("孤立", player.isolated, idx, "isolated", base_y + (ZONE_HEIGHT + 10) * 2)
+        self.draw_zone("战场", player.battlefield_cards, idx, "battlefield", base_y + ZONE_HEIGHT + 10)
+        self.draw_zone("孤立", player.isolated_cards, idx, "isolated", base_y + (ZONE_HEIGHT + 10) * 2)
         info_text = f"{player.name}  分数: {getattr(player, 'score', 0)}  胜局: {getattr(player, 'wins', 0)}"
         name_text = self.font.render(info_text, True, COLOR_TEXT)
         self.screen.blit(name_text, (20, base_y - 50))
@@ -368,7 +368,7 @@ class PygameUI:
 
     def check_click_target(self, x, y):
         for player in self.gm.players:
-            for zone in [player.hand, player.battlefield, player.isolated]:
+            for zone in [player.hand, player.battlefield_cards, player.isolated_cards]:
                 for card in zone:
                     rect = self.get_card_rect_for_card(card, player)
                     if rect.collidepoint(x, y):
@@ -393,10 +393,10 @@ class PygameUI:
             idx = player.hand.index(card)
         elif card in player.battlefield:
             zone_type = "battlefield"
-            idx = player.battlefield.index(card)
+            idx = player.battlefield_cards.index(card)
         else:
             zone_type = "isolated"
-            idx = player.isolated.index(card)
+            idx = player.isolated_cards.index(card)
             
         base_y = 50 + player.index * (ZONE_HEIGHT * 3 + ZONE_MARGIN)
         if zone_type == "battlefield":

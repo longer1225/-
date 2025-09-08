@@ -28,9 +28,9 @@ class Board:
         if zone_type == "hand":
             return player.hand
         elif zone_type == "battlefield":
-            return player.battlefield
+            return player.battlefield_cards
         elif zone_type == "isolated":
-            return player.isolated
+            return player.isolated_cards
         else:
             raise ValueError(f"未知牌区类型: {zone_type}")
 
@@ -41,7 +41,7 @@ class Board:
         """
         cards = []
         for player in self.players:
-            cards.extend(player.battlefield + player.isolated)
+            cards.extend(player.battlefield_cards + player.isolated_cards)
         return cards
 
     def show_board(self):
@@ -50,6 +50,6 @@ class Board:
         """
         for player in self.players:
             print(f"玩家 {player.name} 手牌: {[c.name for c in player.hand]}")
-            print(f"玩家 {player.name} 战场牌: {[c.name for c in player.battlefield]}")
-            print(f"玩家 {player.name} 孤立牌: {[c.name for c in player.isolated]}")
+            print(f"玩家 {player.name} 战场牌: {[c.name for c in player.battlefield_cards]}")
+            print(f"玩家 {player.name} 孤立牌: {[c.name for c in player.isolated_cards]}")
 

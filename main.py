@@ -1,7 +1,10 @@
+
+
 import pygame
-from game.player import Player
+import sys
 from game.game_manager import GameManager
 from ui.PygameUI import PygameUI
+
 
 def main():
     pygame.init()
@@ -9,43 +12,44 @@ def main():
     # 创建 UI 和游戏管理器
     ui = PygameUI()
     gm = GameManager(players=[])
-    
+    ui.set_manager(gm)
+
     clock = pygame.time.Clock()
     FPS = 30
 
-    while ui.running:
-        # ---------------- 事件处理 ----------------
+    # 游戏主循环
+    running = True
+    while running:
         ui.handle_events()
 
         # ---------------- 菜单逻辑 ----------------
         if ui.state == "menu":
-            # 玩家人数选择并开始游戏
-            if ui.selected_num:
-                gm.players = [Player(f"玩家{i+1}", i) for i in range(ui.selected_num)]
-                gm.setup_board()
-                ui.players_done = [False] * len(gm.players)
-                ui.state = "game"
+            ui.draw()
 
         # ---------------- 游戏逻辑 ----------------
         elif ui.state == "game":
+            # 确保玩家同步
             ui.players = gm.players
             ui.current_player_index = gm.current_player_index
 
-            # 如果所有玩家还没走完当前小局，运行小局
-            if not all(getattr(p, 'prev_round_won', False) for p in gm.players):
-                winners = gm.play_small_round(ui)
-                # 小局结束显示胜者
-                ui.round_winner = ", ".join([p.name for p in winners])
+            ui.draw()
 
-        # ---------------- 绘制 ----------------
-        if ui.state == "menu":
-            ui.draw_menu()
-        elif ui.state == "game":
-            ui.draw_game()
+            # 在这里让 GameManager 驱动小局逻辑
+            if gm.current_round < gm.total_rounds:
+                winners = gm.play_small_round(ui)
+                print("小局胜者:", [p.name for p in winners])
+
+                # 检查是否有大局胜利者
+                overall_winners = gm.show_winner()
+                if any(gm.small_rounds_won[p.name] >= 2 for p in gm.players):
+                    print("大局胜者:", overall_winners)
+                    running = False
 
         clock.tick(FPS)
 
     pygame.quit()
+    sys.exit()
+
 
 if __name__ == "__main__":
     main()

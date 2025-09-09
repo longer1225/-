@@ -22,7 +22,12 @@ COLOR_TOOLTIP_BORDER = (100, 100, 150)
 
 
 class PygameUI:
-    """状态驱动 UI，只负责绘制和输入参数，不处理游戏逻辑"""
+    """状态驱动 UI，只负责绘制和输入参数，不处理游戏逻辑
+
+    主要职责：收集玩家点击/选择并将意图以动作对象放入内部队列，
+    外部（GameManager）通过 pop_action 或者直接使用 player_end_turn/select_card 等方法读取意图并决定游戏逻辑。
+    """
+
     def __init__(self):
         pygame.init()
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
@@ -37,7 +42,7 @@ class PygameUI:
         self.selected_num = None  # 菜单选择人数
 
         # 游戏参数（外部GameManager会填充）
-        self.players = []  # 玩家列表
+        self.players = []  # 备用玩家列表（可为 dict 或 Player 对象），优先使用 self.gm.players
         self.current_player_index = 0
         self.turn_number = 1
         self.round_winner = None
@@ -62,6 +67,13 @@ class PygameUI:
 
         # UI 返回操作
         self.action_result = None  # {'type': 'select_card' / 'play' / 'end_turn', ...}
+        # 内部动作队列（按事件顺序推入）
+        self._actions = []
+        # 关联的 GameManager（可选）
+        self.gm = None
+        # 短消息显示
+        self._message = None
+        self._message_ticks = 0
 
     # ------------------ 主循环 ------------------
     def run(self):
@@ -105,14 +117,17 @@ class PygameUI:
         self.hovered_card = None
         if self.state != "game":
             return
-        current_player = self.players[self.current_player_index]
-        for card in current_player.hand:
+        players = self._players()
+        if not players:
+            return
+        current_player = players[self.current_player_index]
+        for card in self._hand(current_player):
             rect = self.get_card_rect_for_card(card, current_player)
             if rect.collidepoint(x, y):
                 self.hovered_card = card
                 return
-        for player in self.players:
-            for zone in [player.get("battlefield_cards", []), player.get("isolated_cards", [])]:
+        for player in players:
+            for zone in [self._battlefield(player), self._isolated(player)]:
                 for card in zone:
                     rect = self.get_card_rect_for_card(card, player)
                     if rect.collidepoint(x, y):
@@ -130,16 +145,12 @@ class PygameUI:
         # 开始游戏按钮
         start_rect = pygame.Rect(WINDOW_WIDTH // 2 - 50, 400, 100, 40)
         if start_rect.collidepoint(x, y) and self.selected_num:
-            # 创建玩家列表
-            self.gm.players = [Player(f"玩家{i+1}", i) for i in range(self.selected_num)]
-            # 初始化游戏板和发牌
-            self.gm.setup_board()
-            self.gm.deal_cards()
-            # 初始化玩家结束状态
-            self.players_done = [False] * len(self.gm.players)
-            # 切换到游戏界面
+            # 把开始事件交给 GameManager 处理，UI 只负责收集选择
+            action = {"type": "start_game", "num_players": self.selected_num}
+            self._actions.append(action)
+            self.action_result = action
+            # 切换到游戏界面，由外部负责创建玩家/初始化棋盘后调用 set_game_manager
             self.state = "game"
-
 
     # ------------------ 游戏点击 ------------------
     def handle_game_click(self, x, y):
@@ -150,7 +161,9 @@ class PygameUI:
             self.target_list = []
             self.enemy_list = []
             self.selecting_targets = getattr(clicked_card, 'requires_target', False)
-            self.action_result = {"type": "select_card", "card": self.selected_card}
+            action = {"type": "select_card", "card": self.selected_card}
+            self._actions.append(action)
+            self.action_result = action
             return
 
         # 点击目标或敌人
@@ -160,7 +173,9 @@ class PygameUI:
                 self.target_list.remove(target_card)
             else:
                 self.target_list.append(target_card)
-            self.action_result = {"type": "select_targets", "targets": self.target_list}
+            action = {"type": "select_targets", "targets": list(self.target_list)}
+            self._actions.append(action)
+            self.action_result = action
 
         target_enemy = self.check_click_enemy(x, y)
         if target_enemy and self.selected_card and self.selecting_targets:
@@ -168,19 +183,25 @@ class PygameUI:
                 self.enemy_list.remove(target_enemy)
             else:
                 self.enemy_list.append(target_enemy)
-            self.action_result = {"type": "select_enemies", "enemies": self.enemy_list}
+            action = {"type": "select_enemies", "enemies": list(self.enemy_list)}
+            self._actions.append(action)
+            self.action_result = action
 
         # 点击出牌/结束回合
         if self.button_play.collidepoint(x, y) and self.selected_card:
-            self.action_result = {"type": "play_card", "card": self.selected_card,
-                                  "targets": self.target_list, "enemies": self.enemy_list}
+            action = {"type": "play_card", "card": self.selected_card,
+                      "targets": list(self.target_list), "enemies": list(self.enemy_list)}
+            self._actions.append(action)
+            self.action_result = action
             self.selected_card = None
             self.target_list = []
             self.enemy_list = []
             self.selecting_targets = False
 
         if self.button_end_turn.collidepoint(x, y):
-            self.action_result = {"type": "end_turn"}
+            action = {"type": "end_turn"}
+            self._actions.append(action)
+            self.action_result = action
 
         if self.button_help.collidepoint(x, y):
             self.show_help = not self.show_help
@@ -210,8 +231,8 @@ class PygameUI:
             self.draw_help_screen()
             pygame.display.flip()
             return
-        # 绘制玩家区域
-        for idx, player in enumerate(self.players):
+        # 绘制玩家区域（支持 Player 对象或 dict）
+        for idx, player in enumerate(self._players()):
             is_current = idx == self.current_player_index
             self.draw_player_zones(player, idx, highlight=is_current)
 
@@ -225,6 +246,7 @@ class PygameUI:
         pygame.draw.rect(self.screen, (100, 100, 200), self.button_help)
         self.screen.blit(self.font.render("帮助", True, COLOR_TEXT),
                          (self.button_help.x + 40, self.button_help.y + 10))
+
         # 回合信息
         phase_text = self.font.render(f"回合: {self.turn_number}", True, COLOR_TEXT)
         self.screen.blit(phase_text, (WINDOW_WIDTH - 250, 20))
@@ -239,6 +261,11 @@ class PygameUI:
         if self.hovered_card:
             mouse_x, mouse_y = pygame.mouse.get_pos()
             self.draw_card_tooltip(self.hovered_card, mouse_x + 20, mouse_y + 20)
+        # 短消息显示
+        if self._message and self._message_ticks > 0:
+            msg_text = self.small_font.render(self._message, True, (255, 255, 0))
+            self.screen.blit(msg_text, (WINDOW_WIDTH // 2 - 200, WINDOW_HEIGHT - 40))
+            self._message_ticks -= 1
         pygame.display.flip()
 
     def draw_help_screen(self):
@@ -264,10 +291,10 @@ class PygameUI:
         base_y = 50 + idx * (ZONE_HEIGHT * 3 + ZONE_MARGIN)
         border_color = COLOR_CURRENT if highlight else COLOR_ZONE
         pygame.draw.rect(self.screen, border_color, (140, base_y - 30, WINDOW_WIDTH - 280, ZONE_HEIGHT * 3 + 30), 2)
-        self.draw_zone("手牌", player.get("hand", []), idx, "hand", base_y)
-        self.draw_zone("战场", player.get("battlefield_cards", []), idx, "battlefield", base_y + ZONE_HEIGHT + 10)
-        self.draw_zone("孤立", player.get("isolated_cards", []), idx, "isolated", base_y + (ZONE_HEIGHT + 10) * 2)
-        info_text = f"{player.get('name', '')}  分数: {player.get('score', 0)}  胜局: {player.get('wins', 0)}"
+        self.draw_zone("手牌", self._hand(player), idx, "hand", base_y)
+        self.draw_zone("战场", self._battlefield(player), idx, "battlefield", base_y + ZONE_HEIGHT + 10)
+        self.draw_zone("孤立", self._isolated(player), idx, "isolated", base_y + (ZONE_HEIGHT + 10) * 2)
+        info_text = f"{self._name(player)}  分数: {self._score(player)}  胜局: {self._wins(player)}"
         name_text = self.font.render(info_text, True, COLOR_TEXT)
         self.screen.blit(name_text, (20, base_y - 50))
 
@@ -284,16 +311,19 @@ class PygameUI:
 
     # ------------------ 点击检测 ------------------
     def check_click_card(self, x, y):
-        current_player = self.players[self.current_player_index]
-        for card in current_player.get("hand", []):
+        players = self._players()
+        if not players:
+            return None
+        current_player = players[self.current_player_index]
+        for card in self._hand(current_player):
             rect = self.get_card_rect_for_card(card, current_player)
             if rect.collidepoint(x, y):
                 return card
         return None
 
     def check_click_target(self, x, y):
-        for player in self.players:
-            for zone in [player.get("hand", []), player.get("battlefield_cards", []), player.get("isolated_cards", [])]:
+        for player in self._players():
+            for zone in [self._hand(player), self._battlefield(player), self._isolated(player)]:
                 for card in zone:
                     rect = self.get_card_rect_for_card(card, player)
                     if rect.collidepoint(x, y):
@@ -301,7 +331,7 @@ class PygameUI:
         return None
 
     def check_click_enemy(self, x, y):
-        for idx, player in enumerate(self.players):
+        for idx, player in enumerate(self._players()):
             base_y = 50 + idx * (ZONE_HEIGHT * 3 + ZONE_MARGIN)
             avatar_rect = pygame.Rect(20, base_y - 50, 100, 100)
             if avatar_rect.collidepoint(x, y):
@@ -322,22 +352,99 @@ class PygameUI:
         return pygame.Rect(x, base_y + 20, CARD_WIDTH, CARD_HEIGHT)
 
     def get_card_rect_for_card(self, card, player):
-        if card in player.get("hand", []):
+        if card in self._hand(player):
             zone_type = "hand"
-            idx = player["hand"].index(card)
-        elif card in player.get("battlefield_cards", []):
+            idx = self._hand(player).index(card)
+        elif card in self._battlefield(player):
             zone_type = "battlefield"
-            idx = player["battlefield_cards"].index(card)
+            idx = self._battlefield(player).index(card)
         else:
             zone_type = "isolated"
-            idx = player.get("isolated_cards", []).index(card)
-        base_y = 50 + self.players.index(player) * (ZONE_HEIGHT * 3 + ZONE_MARGIN)
+            idx = self._isolated(player).index(card)
+        base_y = 50 + self._players().index(player) * (ZONE_HEIGHT * 3 + ZONE_MARGIN)
         if zone_type == "battlefield":
             base_y += ZONE_HEIGHT + 10
         elif zone_type == "isolated":
             base_y += (ZONE_HEIGHT + 10) * 2
         x = 200 + idx * (CARD_WIDTH + CARD_MARGIN)
         return pygame.Rect(x, base_y + 20, CARD_WIDTH, CARD_HEIGHT)
+
+    # ------------------ GameManager 接口与辅助方法 ------------------
+    def _players(self):
+        """返回当前玩家列表：优先使用 gm.players，否则使用 self.players（用于测试或离线）。"""
+        if self.gm and hasattr(self.gm, 'players'):
+            return self.gm.players
+        return self.players
+
+    def _hand(self, player):
+        # 支持 Player 对象或 dict
+        if hasattr(player, 'hand'):
+            return player.hand
+        return player.get('hand', [])
+
+    def _battlefield(self, player):
+        if hasattr(player, 'battlefield_cards'):
+            return player.battlefield_cards
+        return player.get('battlefield_cards', [])
+
+    def _isolated(self, player):
+        if hasattr(player, 'isolated_cards'):
+            return player.isolated_cards
+        return player.get('isolated_cards', [])
+
+    def _name(self, player):
+        if hasattr(player, 'name'):
+            return player.name
+        return player.get('name', '')
+
+    def _score(self, player):
+        if hasattr(player, 'score'):
+            return player.score
+        return player.get('score', 0)
+
+    def _wins(self, player):
+        if hasattr(player, 'wins'):
+            return player.wins
+        return player.get('wins', 0)
+
+    def set_game_manager(self, gm):
+        """在 GameManager 创建并初始化完毕后，调用此方法将 gm 关联到 UI。"""
+        self.gm = gm
+        # 同步玩家索引 和 turn 信息（如果可用）
+        try:
+            self.current_player_index = gm.current_player_index
+            self.turn_number = gm.current_round
+        except Exception:
+            pass
+
+    def pop_action(self):
+        """外部周期性调用以获取最新的 UI 动作（FIFO），返回 None 表示无动作。"""
+        if self._actions:
+            return self._actions.pop(0)
+        return None
+
+    # 以下方法是 GameManager 期望从 UI 调用/查询的简化接口
+    def player_end_turn(self, player):
+        """非阻塞：检查是否玩家点击了结束回合（由 GameManager 在合适时机调用）。"""
+        # 若存在一个 end_turn 动作则消费并返回 True
+        for i, a in enumerate(self._actions):
+            if a.get('type') == 'end_turn':
+                self._actions.pop(i)
+                return True
+        return False
+
+    def select_card(self, player):
+        """非阻塞：返回最近一次 select_card 动作的卡（或 None）。"""
+        for i, a in enumerate(self._actions):
+            if a.get('type') == 'select_card':
+                self._actions.pop(i)
+                return a.get('card')
+        return None
+
+    def show_message(self, text, ticks=60):
+        """在 UI 底部短时显示一条信息（ticks 为帧数）。"""
+        self._message = text
+        self._message_ticks = ticks
 
     # ------------------ 卡牌悬停提示 ------------------
     def draw_card_tooltip(self, card, x, y):

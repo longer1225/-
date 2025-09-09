@@ -104,7 +104,6 @@ class PygameUI:
                 self.draw_game()
             self.clock.tick(FPS)
 
-    # ------------------ 事件处理 ------------------
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -153,16 +152,15 @@ class PygameUI:
     def handle_game_click(self, x, y):
         current_player = self.gm.current_player
 
-        # 点击帮助按钮
+        # 帮助按钮
         if self.button_help.collidepoint(x, y):
             self.show_help = not self.show_help
             return
-
         if self.show_help:
             self.show_help = False
             return
 
-        # -------------------- 点击手牌 --------------------
+        # 点击手牌
         clicked_card = self.check_click_card(x, y)
         if clicked_card:
             if self.selected_card == clicked_card:
@@ -173,64 +171,70 @@ class PygameUI:
                 self.target_list = []
             return
 
-        # -------------------- 点击目标牌 --------------------
+        # 点击目标牌/敌人
         target_card = self.check_click_target(x, y)
         if target_card and self.selected_card:
             if target_card in self.target_list:
                 self.target_list.remove(target_card)
             else:
-                valid = False
-                for skill in self.selected_card.skills:
-                    if skill.targets_required > 0:
-                        if skill.target_type == "self" and target_card in current_player.battlefield_cards + current_player.isolated_cards:
-                            valid = True
-                        elif skill.target_type == "other":
-                            for p in self.gm.players:
-                                if p != current_player and target_card in p.battlefield + p.isolated:
-                                    valid = True
-                if valid:
-                    self.target_list.append(target_card)
+                self.target_list.append(target_card)
         target_enemy = self.check_click_enemy(x, y)
         if target_enemy and self.selected_card:
             if target_enemy in self.enemy_list:
-                self.target_list.remove(target_enemy)
+                self.enemy_list.remove(target_enemy)
             else:
-                valid = False
-                if skill.enemies_required > 0:
-                    if target_enemy != current_player and target_enemy in self.gm.players:
-                        valid = True
-                if valid:
-                    self.enemy_list.append(target_enemy)
+                self.enemy_list.append(target_enemy)
 
-        # -------------------- 点击出牌按钮 --------------------
+        # 出牌按钮
         if self.button_play.collidepoint(x, y) and self.selected_card:
-            max_targets = max((s.targets_required for s in self.selected_card.skills), default=0)
-            if len(self.target_list) >= max_targets:
-                action = PlayAction(owner=current_player, self_card=self.selected_card, board=self.gm.board,manager=self.gm,targets=self.target_list,enemies=self.enemy_list)
-                for t in self.target_list:
-                    action.add_target(t)
-                current_player.play_card(action, self.gm.board)
-                # 出牌后更新 UI
-                if self.selected_card in current_player.hand:
-                    current_player.hand.remove(self.selected_card)
-                self.selected_card = None
-                self.target_list = []
-
-        # -------------------- 点击结束回合按钮 --------------------
-        if self.button_end_turn.collidepoint(x, y):
-            self.players_done[self.gm.current_player_index] = True
+            current_player_card = self.selected_card
+            action = PlayAction(
+                    owner=current_player,
+                    self_card=self.selected_card,
+                    board=self.gm.board,
+                    manager=self.gm,
+                    targets=[],   # 先传空列表
+                    enemies=[]   # 先传空列表
+                )  
+            # 添加目标
+            for t in self.target_list:
+                action.add_target(t)
+            
+            # 添加敌人
+            for e in self.enemy_list:
+                action.add_enemy(e)
+            
+            # 出牌
+            current_player.play_card(action)
+            
+            # 从手牌移除
+            if current_player_card in current_player.hand:
+                current_player.hand.remove(current_player_card)
+            
+            # 重置 UI 选择状态
             self.selected_card = None
             self.target_list = []
+            self.enemy_list = []
 
+
+        # 结束回合按钮
+        if self.button_end_turn.collidepoint(x, y):
+            self.players_done[self.gm.current_player_index] = True
             if all(self.players_done):
-                self.round_over = True
-                winners = [p.name for p in self.gm.players if p.prev_round_won or p.wins > 0]
-                self.round_winner = ", ".join(winners)
+                winners = self.gm.end_small_round()
+                self.round_winner = ", ".join([p.name for p in winners])
                 self.players_done = [False] * len(self.gm.players)
                 self.gm.current_player_index = 0
                 self.turn_number += 1
+                self.gm.start_small_round()
+                # 检查大局
+                if max(p.wins for p in self.gm.players) >= 2:
+                    self.game_over = True
+                    self.big_winner = ", ".join([p.name for p in self.gm.players if p.wins >= 2])
             else:
                 self.gm.next_turn()
+
+
 
     # ------------------ 菜单点击 ------------------
     def handle_menu_click(self, x, y):

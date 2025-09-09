@@ -1,7 +1,4 @@
 import pygame
-from game.player import Player
-from game.game_manager import GameManager
-from game.play_action import PlayAction
 
 # ------------------ UI 参数 ------------------
 WINDOW_WIDTH = 1200
@@ -15,7 +12,6 @@ CARD_MARGIN = 10
 ZONE_HEIGHT = 120
 ZONE_MARGIN = 40
 
-# 区域颜色
 COLOR_BG = (30, 30, 30)
 COLOR_ZONE = (60, 60, 100)
 COLOR_SELECTED = (200, 200, 50)
@@ -26,73 +22,46 @@ COLOR_TOOLTIP_BORDER = (100, 100, 150)
 
 
 class PygameUI:
-    def wrap_text(self, text, max_width):
-        """
-        按最大宽度自动换行，返回字符串列表。
-        """
-        lines = []
-        if not text:
-            return lines
-        font = self.small_font if hasattr(self, 'small_font') else None
-        words = text.split(' ')
-        current_line = ''
-        for word in words:
-            test_line = current_line + (' ' if current_line else '') + word
-            if font and font.size(test_line)[0] > max_width:
-                if current_line:
-                    lines.append(current_line)
-                current_line = word
-            else:
-                current_line = test_line
-        if current_line:
-            lines.append(current_line)
-        return lines
-    def __init__(self, game_manager: GameManager):
+    """状态驱动 UI，只负责绘制和输入参数，不处理游戏逻辑"""
+    def __init__(self):
         pygame.init()
-        self.gm = game_manager
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         pygame.display.set_caption("萝卜昆特牌")
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont("simhei", 20)
         self.small_font = pygame.font.SysFont("simhei", 16)
 
-        # ------------------ 玩家选牌状态 ------------------
-        self.selected_card = None        # 当前选中的手牌
-        self.selecting_targets = False     # 是否在选敌人阶段
-        self.target_list = [] 
-        self.enemy_list = []          # 已选择技能目标列表
-        self.hovered_card = None         # 悬停的卡牌
-        self.turn_number = 1             # 当前回合数
-        self.phase = "main"              # 游戏阶段
-
+        # 状态
         self.running = True
-        self.state = "menu"              # menu / game
-        self.selected_num = None         # 玩家人数选择
+        self.state = "menu"  # menu / game
+        self.selected_num = None  # 菜单选择人数
 
-        # 游戏按钮
+        # 游戏参数（外部GameManager会填充）
+        self.players = []  # 玩家列表
+        self.current_player_index = 0
+        self.turn_number = 1
+        self.round_winner = None
+        self.big_winner = None
+
+        # 玩家选择状态
+        self.selected_card = None
+        self.selecting_targets = False
+        self.target_list = []
+        self.enemy_list = []
+
+        # 鼠标悬停
+        self.hovered_card = None
+
+        # 控制帮助界面
+        self.show_help = False
+
+        # 按钮
         self.button_play = pygame.Rect(WINDOW_WIDTH - 200, 100, 150, 40)
         self.button_end_turn = pygame.Rect(WINDOW_WIDTH - 200, 160, 150, 40)
         self.button_help = pygame.Rect(WINDOW_WIDTH - 200, 220, 150, 40)
 
-        # 当前玩家结束状态
-        self.players_done = []
-
-        # 胜利显示
-        self.round_winner = None
-        self.big_winner = None
-
-        # 控制小局/大局
-        self.round_over = False
-        self.game_over = False
-
-        # 游戏日志
-        self.game_log = ["游戏开始!"]
-        self.max_log_entries = 10
-
-        # 帮助界面状态
-        self.show_help = False
-        # 新增：用于存储收集到的信息
-        self.collect_info = []
+        # UI 返回操作
+        self.action_result = None  # {'type': 'select_card' / 'play' / 'end_turn', ...}
 
     # ------------------ 主循环 ------------------
     def run(self):
@@ -103,16 +72,20 @@ class PygameUI:
             elif self.state == "game":
                 self.draw_game()
             self.clock.tick(FPS)
+            yield self.action_result
+            self.action_result = None
 
+    # ------------------ 事件处理 ------------------
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
+                self.action_result = {"type": "quit"}
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 x, y = event.pos
                 if self.state == "menu":
                     self.handle_menu_click(x, y)
-                elif self.state == "game" and not self.game_over:
+                elif self.state == "game":
                     self.handle_game_click(x, y)
             elif event.type == pygame.MOUSEMOTION:
                 self.handle_mouse_motion(event.pos)
@@ -125,133 +98,94 @@ class PygameUI:
                     elif self.selected_card:
                         self.selected_card = None
                         self.target_list = []
+                        self.enemy_list = []
 
     def handle_mouse_motion(self, pos):
         x, y = pos
         self.hovered_card = None
-        
-        # 检查鼠标是否悬停在卡牌上
-        if self.state == "game" and not self.game_over:
-            # 检查手牌
-            current_player = self.gm.current_player
-            for card in current_player.hand:
-                rect = self.get_card_rect_for_card(card, current_player)
-                if rect.collidepoint(x, y):
-                    self.hovered_card = card
-                    return
-            
-            # 检查战场和孤立区的卡牌
-            for player in self.gm.players:
-                for zone in [player.battlefield_cards, player.isolated_cards]:
-                    for card in zone:
-                        rect = self.get_card_rect_for_card(card, player)
-                        if rect.collidepoint(x, y):
-                            self.hovered_card = card
-                            return
-
-    def handle_game_click(self, x, y):
-        current_player = self.gm.current_player
-
-        # 帮助按钮
-        if self.button_help.collidepoint(x, y):
-            self.show_help = not self.show_help
+        if self.state != "game":
             return
-        if self.show_help:
-            self.show_help = False
-            return
-
-        # 点击手牌
-        clicked_card = self.check_click_card(x, y)
-        if clicked_card:
-            if self.selected_card == clicked_card:
-                self.selected_card = None
-                self.target_list = []
-            else:
-                self.selected_card = clicked_card
-                self.target_list = []
-            return
-
-        # 点击目标牌/敌人
-        target_card = self.check_click_target(x, y)
-        if target_card and self.selected_card:
-            if target_card in self.target_list:
-                self.target_list.remove(target_card)
-            else:
-                self.target_list.append(target_card)
-        target_enemy = self.check_click_enemy(x, y)
-        if target_enemy and self.selected_card:
-            if target_enemy in self.enemy_list:
-                self.enemy_list.remove(target_enemy)
-            else:
-                self.enemy_list.append(target_enemy)
-
-        # 出牌按钮
-        if self.button_play.collidepoint(x, y) and self.selected_card:
-            current_player_card = self.selected_card
-            action = PlayAction(
-                    owner=current_player,
-                    self_card=self.selected_card,
-                    board=self.gm.board,
-                    manager=self.gm,
-                    targets=[],   # 先传空列表
-                    enemies=[]   # 先传空列表
-                )  
-            # 添加目标
-            for t in self.target_list:
-                action.add_target(t)
-            
-            # 添加敌人
-            for e in self.enemy_list:
-                action.add_enemy(e)
-            
-            # 出牌
-            current_player.play_card(action)
-            
-            # 从手牌移除
-            if current_player_card in current_player.hand:
-                current_player.hand.remove(current_player_card)
-            
-            # 重置 UI 选择状态
-            self.selected_card = None
-            self.target_list = []
-            self.enemy_list = []
-
-
-        # 结束回合按钮
-        if self.button_end_turn.collidepoint(x, y):
-            self.players_done[self.gm.current_player_index] = True
-            if all(self.players_done):
-                winners = self.gm.end_small_round()
-                self.round_winner = ", ".join([p.name for p in winners])
-                self.players_done = [False] * len(self.gm.players)
-                self.gm.current_player_index = 0
-                self.turn_number += 1
-                self.gm.start_small_round()
-                # 检查大局
-                if max(p.wins for p in self.gm.players) >= 2:
-                    self.game_over = True
-                    self.big_winner = ", ".join([p.name for p in self.gm.players if p.wins >= 2])
-            else:
-                self.gm.next_turn()
-
-
+        current_player = self.players[self.current_player_index]
+        for card in current_player.hand:
+            rect = self.get_card_rect_for_card(card, current_player)
+            if rect.collidepoint(x, y):
+                self.hovered_card = card
+                return
+        for player in self.players:
+            for zone in [player.get("battlefield_cards", []), player.get("isolated_cards", [])]:
+                for card in zone:
+                    rect = self.get_card_rect_for_card(card, player)
+                    if rect.collidepoint(x, y):
+                        self.hovered_card = card
+                        return
 
     # ------------------ 菜单点击 ------------------
     def handle_menu_click(self, x, y):
+        # 玩家人数选择
         for i, num in enumerate([2, 3, 4]):
             rect = pygame.Rect(WINDOW_WIDTH // 2 - 50, 200 + i * 60, 100, 40)
             if rect.collidepoint(x, y):
                 self.selected_num = num
 
+        # 开始游戏按钮
         start_rect = pygame.Rect(WINDOW_WIDTH // 2 - 50, 400, 100, 40)
         if start_rect.collidepoint(x, y) and self.selected_num:
+            # 创建玩家列表
             self.gm.players = [Player(f"玩家{i+1}", i) for i in range(self.selected_num)]
+            # 初始化游戏板和发牌
             self.gm.setup_board()
             self.gm.deal_cards()
+            # 初始化玩家结束状态
             self.players_done = [False] * len(self.gm.players)
+            # 切换到游戏界面
             self.state = "game"
 
-    # ------------------ 菜单绘制 ------------------
+
+    # ------------------ 游戏点击 ------------------
+    def handle_game_click(self, x, y):
+        # 点击手牌
+        clicked_card = self.check_click_card(x, y)
+        if clicked_card:
+            self.selected_card = clicked_card if clicked_card != self.selected_card else None
+            self.target_list = []
+            self.enemy_list = []
+            self.selecting_targets = getattr(clicked_card, 'requires_target', False)
+            self.action_result = {"type": "select_card", "card": self.selected_card}
+            return
+
+        # 点击目标或敌人
+        target_card = self.check_click_target(x, y)
+        if target_card and self.selected_card and self.selecting_targets:
+            if target_card in self.target_list:
+                self.target_list.remove(target_card)
+            else:
+                self.target_list.append(target_card)
+            self.action_result = {"type": "select_targets", "targets": self.target_list}
+
+        target_enemy = self.check_click_enemy(x, y)
+        if target_enemy and self.selected_card and self.selecting_targets:
+            if target_enemy in self.enemy_list:
+                self.enemy_list.remove(target_enemy)
+            else:
+                self.enemy_list.append(target_enemy)
+            self.action_result = {"type": "select_enemies", "enemies": self.enemy_list}
+
+        # 点击出牌/结束回合
+        if self.button_play.collidepoint(x, y) and self.selected_card:
+            self.action_result = {"type": "play_card", "card": self.selected_card,
+                                  "targets": self.target_list, "enemies": self.enemy_list}
+            self.selected_card = None
+            self.target_list = []
+            self.enemy_list = []
+            self.selecting_targets = False
+
+        if self.button_end_turn.collidepoint(x, y):
+            self.action_result = {"type": "end_turn"}
+
+        if self.button_help.collidepoint(x, y):
+            self.show_help = not self.show_help
+
+    # ------------------ 绘制 ------------------
     def draw_menu(self):
         self.screen.fill(COLOR_BG)
         title = self.font.render("选择玩家人数", True, COLOR_TEXT)
@@ -266,27 +200,22 @@ class PygameUI:
         pygame.draw.rect(self.screen, (200, 100, 100), start_rect)
         start_text = self.font.render("开始游戏", True, COLOR_TEXT)
         self.screen.blit(start_text, (start_rect.x + 5, start_rect.y + 10))
-        
-        # 添加帮助提示
         help_text = self.small_font.render("按 H 键查看游戏帮助", True, COLOR_TEXT)
         self.screen.blit(help_text, (WINDOW_WIDTH // 2 - 80, 500))
-        
         pygame.display.flip()
 
-    # ------------------ 游戏界面 ------------------
     def draw_game(self):
         self.screen.fill(COLOR_BG)
-        
         if self.show_help:
             self.draw_help_screen()
             pygame.display.flip()
             return
-            
-        for idx, player in enumerate(self.gm.players):
-            is_current = (idx == self.gm.current_player_index)
+        # 绘制玩家区域
+        for idx, player in enumerate(self.players):
+            is_current = idx == self.current_player_index
             self.draw_player_zones(player, idx, highlight=is_current)
 
-        # 绘制按钮
+        # 按钮
         pygame.draw.rect(self.screen, (100, 200, 100), self.button_play)
         self.screen.blit(self.font.render("出牌", True, COLOR_TEXT),
                          (self.button_play.x + 40, self.button_play.y + 10))
@@ -296,91 +225,49 @@ class PygameUI:
         pygame.draw.rect(self.screen, (100, 100, 200), self.button_help)
         self.screen.blit(self.font.render("帮助", True, COLOR_TEXT),
                          (self.button_help.x + 40, self.button_help.y + 10))
-
-        # 绘制游戏状态信息
-        phase_text = self.font.render(f"回合: {self.turn_number} 阶段: {self.phase}", True, COLOR_TEXT)
+        # 回合信息
+        phase_text = self.font.render(f"回合: {self.turn_number}", True, COLOR_TEXT)
         self.screen.blit(phase_text, (WINDOW_WIDTH - 250, 20))
-        
-        # 绘制资源信息
-        for i, player in enumerate(self.gm.players):
-            resource_text = self.font.render(f"资源: {getattr(player, 'resources', 0)}", True, COLOR_TEXT)
-            self.screen.blit(resource_text, (20, 100 + i * 250))
-
+        # 小局/大局胜者
         if self.round_winner:
             winner_text = self.font.render(f"本小局胜者: {self.round_winner}", True, (255, 255, 0))
             self.screen.blit(winner_text, (WINDOW_WIDTH // 2 - 80, 50))
-
-        if any(getattr(p, 'wins', 0) >= 2 for p in self.gm.players) and not self.game_over:
-            self.game_over = True
-            max_wins = max(getattr(p, 'wins', 0) for p in self.gm.players)
-            winners = [p.name for p in self.gm.players if getattr(p, 'wins', 0) == max_wins]
-            self.big_winner = ", ".join(winners)
-
         if self.big_winner:
             big_text = self.font.render(f"大局胜者: {self.big_winner}", True, (255, 200, 0))
             self.screen.blit(big_text, (WINDOW_WIDTH // 2 - 80, 20))
-            
-
-        
-        # 绘制卡牌悬停提示
+        # 悬停提示
         if self.hovered_card:
             mouse_x, mouse_y = pygame.mouse.get_pos()
             self.draw_card_tooltip(self.hovered_card, mouse_x + 20, mouse_y + 20)
-            
-        # 绘制选择的目标反馈
-        for target_card in self.target_list:
-            for player in self.gm.players:
-                if target_card in player.battlefield_cards + player.isolated_cards + player.hand:
-                    rect = self.get_card_rect_for_card(target_card, player)
-                    pygame.draw.rect(self.screen, (255, 100, 100), rect, 3)
-
         pygame.display.flip()
-        
+
     def draw_help_screen(self):
-        # 半透明背景
         s = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
         s.fill((0, 0, 0, 200))
         self.screen.blit(s, (0, 0))
-        
-        # 帮助标题
         title = self.font.render("游戏帮助", True, (255, 255, 0))
         self.screen.blit(title, (WINDOW_WIDTH // 2 - 50, 50))
-        
-        # 帮助内容
         help_lines = [
-            "游戏操作:",
             "- 点击卡牌选择/取消选择",
             "- 点击目标区域选择技能目标",
             "- 点击'出牌'按钮打出选中卡牌",
             "- 点击'结束回合'按钮结束当前回合",
-            "",
-            "快捷键:",
             "- H: 显示/隐藏帮助",
-            "- ESC: 取消选择/关闭帮助",
-            "",
-            "游戏规则:",
-            "- 每个玩家轮流出牌",
-            "- 使用卡牌技能需要选择目标",
-            "- 先赢得2小局的玩家获得最终胜利"
+            "- ESC: 取消选择/关闭帮助"
         ]
-        
         for i, line in enumerate(help_lines):
             text = self.small_font.render(line, True, (255, 255, 255))
             self.screen.blit(text, (WINDOW_WIDTH // 2 - 200, 100 + i * 25))
-            
-        # 关闭提示
-        close_text = self.small_font.render("点击任意处或按ESC关闭帮助", True, (200, 200, 200))
-        self.screen.blit(close_text, (WINDOW_WIDTH // 2 - 150, WINDOW_HEIGHT - 50))
 
-    # ------------------ 玩家区域绘制 ------------------
+    # ------------------ 玩家区域 ------------------
     def draw_player_zones(self, player, idx, highlight=False):
         base_y = 50 + idx * (ZONE_HEIGHT * 3 + ZONE_MARGIN)
         border_color = COLOR_CURRENT if highlight else COLOR_ZONE
         pygame.draw.rect(self.screen, border_color, (140, base_y - 30, WINDOW_WIDTH - 280, ZONE_HEIGHT * 3 + 30), 2)
-        self.draw_zone("手牌", player.hand, idx, "hand", base_y)
-        self.draw_zone("战场", player.battlefield_cards, idx, "battlefield", base_y + ZONE_HEIGHT + 10)
-        self.draw_zone("孤立", player.isolated_cards, idx, "isolated", base_y + (ZONE_HEIGHT + 10) * 2)
-        info_text = f"{player.name}  分数: {getattr(player, 'score', 0)}  胜局: {getattr(player, 'wins', 0)}"
+        self.draw_zone("手牌", player.get("hand", []), idx, "hand", base_y)
+        self.draw_zone("战场", player.get("battlefield_cards", []), idx, "battlefield", base_y + ZONE_HEIGHT + 10)
+        self.draw_zone("孤立", player.get("isolated_cards", []), idx, "isolated", base_y + (ZONE_HEIGHT + 10) * 2)
+        info_text = f"{player.get('name', '')}  分数: {player.get('score', 0)}  胜局: {player.get('wins', 0)}"
         name_text = self.font.render(info_text, True, COLOR_TEXT)
         self.screen.blit(name_text, (20, base_y - 50))
 
@@ -392,21 +279,21 @@ class PygameUI:
             rect = self.get_card_rect(i, player_index, zone_type, y)
             color = COLOR_SELECTED if card == self.selected_card else (180, 180, 180)
             pygame.draw.rect(self.screen, color, rect)
-            text = self.font.render(card.name, True, (0, 0, 0))
+            text = self.font.render(getattr(card, 'name', str(card)), True, (0, 0, 0))
             self.screen.blit(text, (rect.x + 5, rect.y + 5))
-            
 
+    # ------------------ 点击检测 ------------------
     def check_click_card(self, x, y):
-        current_player = self.gm.current_player
-        for i, card in enumerate(current_player.hand):
+        current_player = self.players[self.current_player_index]
+        for card in current_player.get("hand", []):
             rect = self.get_card_rect_for_card(card, current_player)
             if rect.collidepoint(x, y):
                 return card
         return None
 
     def check_click_target(self, x, y):
-        for player in self.gm.players:
-            for zone in [player.hand, player.battlefield_cards, player.isolated_cards]:
+        for player in self.players:
+            for zone in [player.get("hand", []), player.get("battlefield_cards", []), player.get("isolated_cards", [])]:
                 for card in zone:
                     rect = self.get_card_rect_for_card(card, player)
                     if rect.collidepoint(x, y):
@@ -414,15 +301,14 @@ class PygameUI:
         return None
 
     def check_click_enemy(self, x, y):
-        # 检查是否点击到玩家头像区域，返回被点击的玩家对象
-        # 头像区域假设为每个玩家左侧的一个矩形
-        for idx, player in enumerate(self.gm.players):
+        for idx, player in enumerate(self.players):
             base_y = 50 + idx * (ZONE_HEIGHT * 3 + ZONE_MARGIN)
-            avatar_rect = pygame.Rect(20, base_y - 50, 100, 100)  # 头像区域
+            avatar_rect = pygame.Rect(20, base_y - 50, 100, 100)
             if avatar_rect.collidepoint(x, y):
                 return player
         return None
 
+    # ------------------ 卡牌位置 ------------------
     def get_card_rect(self, i, player_index, zone_type, y=None):
         if zone_type == "hand":
             base_y = 50 + player_index * (ZONE_HEIGHT * 3 + ZONE_MARGIN)
@@ -434,64 +320,58 @@ class PygameUI:
             base_y = y or 0
         x = 200 + i * (CARD_WIDTH + CARD_MARGIN)
         return pygame.Rect(x, base_y + 20, CARD_WIDTH, CARD_HEIGHT)
-    
+
     def get_card_rect_for_card(self, card, player):
-        if card in player.hand:
+        if card in player.get("hand", []):
             zone_type = "hand"
-            idx = player.hand.index(card)
-        elif card in player.battlefield:
+            idx = player["hand"].index(card)
+        elif card in player.get("battlefield_cards", []):
             zone_type = "battlefield"
-            idx = player.battlefield_cards.index(card)
+            idx = player["battlefield_cards"].index(card)
         else:
             zone_type = "isolated"
-            idx = player.isolated_cards.index(card)
-            
-        base_y = 50 + player.index * (ZONE_HEIGHT * 3 + ZONE_MARGIN)
+            idx = player.get("isolated_cards", []).index(card)
+        base_y = 50 + self.players.index(player) * (ZONE_HEIGHT * 3 + ZONE_MARGIN)
         if zone_type == "battlefield":
             base_y += ZONE_HEIGHT + 10
         elif zone_type == "isolated":
             base_y += (ZONE_HEIGHT + 10) * 2
-            
         x = 200 + idx * (CARD_WIDTH + CARD_MARGIN)
         return pygame.Rect(x, base_y + 20, CARD_WIDTH, CARD_HEIGHT)
 
+    # ------------------ 卡牌悬停提示 ------------------
     def draw_card_tooltip(self, card, x, y):
-        if card and not self.game_over:
-            # 获取卡牌描述文本
-            description = getattr(card, 'description', '暂无描述')
-            skills_text = ""
-            if hasattr(card, 'skills') and card.skills:
-                skills_text = "技能: " + ", ".join([s.name for s in card.skills])
-            
-            # 计算提示框大小
-            lines = self.wrap_text(description, 180)
-            height = 80 + len(lines) * 20
-            
-            # 调整位置防止超出屏幕
-            if x + 210 > WINDOW_WIDTH:
-                x = WINDOW_WIDTH - 210
-            if y + height > WINDOW_HEIGHT:
-                y = WINDOW_HEIGHT - height
-                
-            tooltip_rect = pygame.Rect(x, y, 200, height)
-            pygame.draw.rect(self.screen, COLOR_TOOLTIP_BG, tooltip_rect)
-            pygame.draw.rect(self.screen, COLOR_TOOLTIP_BORDER, tooltip_rect, 2)
-            
-            # 显示卡牌名称
-            name_text = self.font.render(card.name, True, (255, 255, 255))
-            self.screen.blit(name_text, (x + 10, y + 10))
-            
-            # 显示卡牌描述
-            for i, line in enumerate(lines):
-                desc_text = self.small_font.render(line, True, (200, 200, 200))
-                self.screen.blit(desc_text, (x + 10, y + 40 + i * 20))
-            
-            # 显示技能信息
-            if skills_text:
-                skill_lines = self.wrap_text(skills_text, 180)
-                for i, line in enumerate(skill_lines):
-                    skill_text = self.small_font.render(line, True, (200, 200, 100))
-                    self.screen.blit(skill_text, (x + 10, y + 40 + len(lines) * 20 + i * 20))
+        description = getattr(card, 'description', '暂无描述')
+        lines = self.wrap_text(description, 180)
+        height = 60 + len(lines) * 20
+        if x + 210 > WINDOW_WIDTH:
+            x = WINDOW_WIDTH - 210
+        if y + height > WINDOW_HEIGHT:
+            y = WINDOW_HEIGHT - height
+        tooltip_rect = pygame.Rect(x, y, 200, height)
+        pygame.draw.rect(self.screen, COLOR_TOOLTIP_BG, tooltip_rect)
+        pygame.draw.rect(self.screen, COLOR_TOOLTIP_BORDER, tooltip_rect, 2)
+        name_text = self.font.render(getattr(card, 'name', str(card)), True, (255, 255, 255))
+        self.screen.blit(name_text, (x + 10, y + 10))
+        for i, line in enumerate(lines):
+            desc_text = self.small_font.render(line, True, (200, 200, 200))
+            self.screen.blit(desc_text, (x + 10, y + 40 + i * 20))
 
-
-
+    # ------------------ 文本换行 ------------------
+    def wrap_text(self, text, max_width):
+        lines = []
+        if not text:
+            return lines
+        words = text.split(' ')
+        current_line = ''
+        for word in words:
+            test_line = current_line + (' ' if current_line else '') + word
+            if self.font.size(test_line)[0] > max_width:
+                if current_line:
+                    lines.append(current_line)
+                current_line = word
+            else:
+                current_line = test_line
+        if current_line:
+            lines.append(current_line)
+        return lines

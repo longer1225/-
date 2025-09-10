@@ -132,11 +132,10 @@ class GameManager:
                 ui=ui
             )
             player.play_card(action)
-            # 出牌后继续当前玩家的回合，不切换玩家
-            continue
+            # 出牌后切换玩家
+            self.next_turn()
 
-            # 继续当前玩家的回合
-            continue
+
 
         # 小局全部玩家回合结束后结算
         winners = self.end_small_round()

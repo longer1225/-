@@ -1,7 +1,7 @@
 # game/card.py
 
 class Card:
-    def __init__(self, name, points, skills=None, is_isolated=False):
+    def __init__(self, name, points, skills=None, is_isolated=False, base_points=None):
         """
         初始化卡牌
         :param name: 卡牌名称
@@ -11,6 +11,8 @@ class Card:
         """
         self.name = name
         self.points = points
+        # 记录基础点数（初始值），便于 UI 提示与效果对比
+        self.base_points = points if base_points is None else base_points
         self.skills = skills or []
         self.is_isolated = is_isolated
 
@@ -66,6 +68,7 @@ class Card:
         return {
             "name": self.name,
             "points": self.points,
+            "base_points": getattr(self, "base_points", self.points),
             "skills": [str(skill) for skill in self.skills],
             "is_isolated": self.is_isolated
         }

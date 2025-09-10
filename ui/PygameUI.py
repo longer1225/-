@@ -7,6 +7,11 @@ from game.game_manager import GameManager
 from ui.constants import *
 
 class PygameUI:
+    # 类级默认值用于静态检查（实例会在 __init__ 中覆盖）
+    hover_card: Optional[Card] = None
+    hover_start_ms: int = 0
+    hover_delay_ms: int = 600
+    mouse_pos: tuple[int, int] = (0, 0)
     def __init__(self):
         pygame.init()
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
@@ -48,6 +53,12 @@ class PygameUI:
         self.card_height = 90
         self.card_spacing = 10   # 原为5，增大以避免遮挡
         self.card_left = 150
+
+        # 悬停提示（技能说明）
+        self.hover_card = None            # 当前鼠标悬停的卡牌
+        self.hover_start_ms = 0           # 开始悬停的时间戳（ms）
+        self.hover_delay_ms = 600         # 悬停多少毫秒后显示提示
+        self.mouse_pos = (0, 0)           # 记录鼠标位置用于提示框定位
     
     def _build_card_rects(self, cards: List[Card], y: int) -> List[pygame.Rect]:
         """根据卡名实际宽度为一行卡牌构建矩形列表，保证卡名完整显示。"""
@@ -99,6 +110,80 @@ class PygameUI:
         self.selected_card = None
         return card
 
+    def select_cards_from_hand(self, player: Player, count: int, prompt: str = "请选择卡牌并点击确认") -> List[Card]:
+        """阻塞等待玩家从手牌中选择 count 张卡牌，点击“确认”按钮后返回。
+        - 允许重复点击同一张手牌以取消选择。
+        - 只有当选择数量达到 count 时，确认按钮才可用。
+        返回选择的卡牌列表；若中途退出或异常，则返回当前已选（可能不足 count）。
+        """
+        chosen: List[Card] = []
+        # 保存现场并清空当前选择，避免与主循环状态冲突
+        prev_selected = self.selected_card
+        prev_targets = list(self.target_list)
+        prev_enemies = list(self.enemy_list)
+        self.selected_card = None
+        self.target_list = []
+        self.enemy_list = []
+
+        # 放在更靠左的位置，避免与“出牌/结束回合”按钮重叠
+        confirm_rect = pygame.Rect(WINDOW_WIDTH - 450, WINDOW_HEIGHT - 60, 120, 40)
+        while self.running:
+            # 提示文案
+            remain = max(0, count - len(chosen))
+            tip = f"{prompt}（还需选择 {remain} 张）"
+            self.show_message(tip)
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    pygame.quit()
+                    sys.exit()
+                elif event.type == pygame.MOUSEMOTION:
+                    self.handle_mouse_motion(event.pos)
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    x, y = event.pos
+                    # 选择/取消选择手牌
+                    card = self.check_click_card(player, x, y, "hand")
+                    if card:
+                        if card in chosen:
+                            chosen.remove(card)
+                        else:
+                            if len(chosen) < count:
+                                chosen.append(card)
+                        continue
+
+                    # 确认按钮：仅在数量达标时可用
+                    if confirm_rect.collidepoint(x, y) and len(chosen) == count:
+                        # 恢复现场
+                        self.selected_card = prev_selected
+                        self.target_list = prev_targets
+                        self.enemy_list = prev_enemies
+                        self.show_message("")
+                        return chosen
+
+            # 绘制界面（按钮与已选高亮）
+            self.draw_game()
+            # 绘制确认按钮（覆盖在底部日志上层）
+            pygame.draw.rect(self.screen, COLOR_HIGHLIGHT if len(chosen) == count else COLOR_ZONE, confirm_rect)
+            label = self.font.render("确认", True, COLOR_TEXT)
+            self.screen.blit(label, (confirm_rect.x + 35, confirm_rect.y + 5))
+
+            # 在当前玩家手牌中高亮已选卡牌
+            # 这里不直接改 card.highlight，避免干扰 hover；只在按钮旁边列出已选
+            if chosen:
+                names = ", ".join(c.name for c in chosen)
+                info = self.small_font.render(f"已选：{names}", True, COLOR_TEXT)
+                self.screen.blit(info, (confirm_rect.x - 260, confirm_rect.y + 10))
+
+            pygame.display.flip()
+            self.clock.tick(30)
+
+        # 退出时恢复现场
+        self.selected_card = prev_selected
+        self.target_list = prev_targets
+        self.enemy_list = prev_enemies
+        return chosen
+
     def wait_for_player_action(self, player: Player) -> Dict[str, Any]:
         """等待玩家操作"""
         waiting = True
@@ -136,6 +221,9 @@ class PygameUI:
                     self.running = False
                     pygame.quit()
                     sys.exit()
+                elif event.type == pygame.MOUSEMOTION:
+                    # 更新悬停状态以支持提示
+                    self.handle_mouse_motion(event.pos)
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     x, y = event.pos
 
@@ -259,6 +347,9 @@ class PygameUI:
                 self.running = False
                 pygame.quit()
                 sys.exit()
+            elif event.type == pygame.MOUSEMOTION:
+                # 更新悬停提示
+                self.handle_mouse_motion(event.pos)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 x, y = event.pos
                 end_turn_rect = pygame.Rect(WINDOW_WIDTH - 150, WINDOW_HEIGHT - 60, 120, 40)
@@ -278,7 +369,6 @@ class PygameUI:
                 self.running = False
                 pygame.quit()
                 sys.exit()
-
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 x, y = event.pos
                 if self.state == "menu":
@@ -287,9 +377,102 @@ class PygameUI:
                     self.handle_game_click(x, y)
                 elif self.state == "game_over":
                     self.handle_game_over_click(x, y)
-
             elif event.type == pygame.MOUSEMOTION and self.state == "game":
                 self.handle_mouse_motion(event.pos)
+
+    def _get_card_under_mouse(self, x: int, y: int) -> Optional[Card]:
+        """返回鼠标下的卡牌（任意玩家任意区域），若无则返回 None。"""
+        if not self.gm:
+            return None
+        for player in self.gm.players:
+            # 依次检查手牌/战场/孤立
+            for zone in ("hand", "battlefield", "isolated"):
+                card = self.check_click_card(player, x, y, zone)
+                if card:
+                    return card
+        return None
+
+    def _get_card_rect(self, card: Card) -> Optional[pygame.Rect]:
+        """获取某张卡牌当前屏幕上的矩形（查找所有玩家与区域）。"""
+        if not self.gm:
+            return None
+        for player in self.gm.players:
+            for zone in ("hand", "battlefield", "isolated"):
+                rect = self.get_card_rect_for_card(card, player, zone)
+                if rect is not None:
+                    return rect
+        return None
+
+    def _collect_skill_tooltip_lines(self, card: Card) -> list[str]:
+        """从卡牌生成提示文案：基础点数 + 每个技能的第一行说明。"""
+        lines: list[str] = []
+        # 基础点数
+        base = getattr(card, "base_points", card.points)
+        lines.append(f"基础点数：{base}")
+        if not getattr(card, "skills", None):
+            return lines
+        for s in card.skills:
+            doc = (s.__class__.__doc__ or "").strip()
+            # 仅取第一行，以免过长
+            first_line = doc.splitlines()[0] if doc else ""
+            if first_line:
+                lines.append(f"【{getattr(s, 'name', s.__class__.__name__)}】{first_line}")
+            else:
+                lines.append(f"【{getattr(s, 'name', s.__class__.__name__)}】无技能说明")
+        return lines
+
+    def _draw_tooltip(self) -> None:
+        """在需要时绘制悬停提示框。"""
+        if not self.hover_card:
+            return
+        # 是否达到延迟
+        now = pygame.time.get_ticks()
+        if self.hover_start_ms == 0 or now - self.hover_start_ms < self.hover_delay_ms:
+            return
+
+        lines = self._collect_skill_tooltip_lines(self.hover_card)
+        if not lines:
+            return
+
+        # 组装文本，自动换行
+        wrapped: list[str] = []
+        max_width = 320
+        for line in lines:
+            wrapped.extend(self._wrap_text(line, self.small_font, max_width - 16))
+        if not wrapped:
+            return
+
+        # 计算提示框尺寸
+        line_h = 18
+        padding = 8
+        text_w = 0
+        for seg in wrapped:
+            w, _ = self.small_font.size(seg)
+            text_w = max(text_w, w)
+        box_w = min(max_width, text_w + padding * 2)
+        box_h = padding * 2 + line_h * len(wrapped)
+
+        # 确定位置（靠近鼠标，避免越界）
+        mx, my = self.mouse_pos
+        x = mx + 14
+        y = my + 14
+        if x + box_w > WINDOW_WIDTH:
+            x = WINDOW_WIDTH - box_w - 10
+        if y + box_h > WINDOW_HEIGHT:
+            y = WINDOW_HEIGHT - box_h - 10
+
+        # 绘制背景与边框
+        bg_color = (30, 30, 30)
+        border_color = (200, 200, 200)
+        pygame.draw.rect(self.screen, bg_color, pygame.Rect(x, y, box_w, box_h))
+        pygame.draw.rect(self.screen, border_color, pygame.Rect(x, y, box_w, box_h), 1)
+
+        # 绘制文本
+        ty = y + padding
+        for seg in wrapped:
+            surf = self.small_font.render(seg, True, COLOR_TEXT)
+            self.screen.blit(surf, (x + padding, ty))
+            ty += line_h
 
     def handle_menu_click(self, x: int, y: int) -> None:
         """处理菜单点击"""
@@ -391,6 +574,12 @@ class PygameUI:
             return
             
         x, y = pos
+        # 更新鼠标位置与悬停状态
+        self.mouse_pos = (x, y)
+        hovered_card = self._get_card_under_mouse(x, y)
+        if hovered_card is not self.hover_card:
+            self.hover_card = hovered_card
+            self.hover_start_ms = pygame.time.get_ticks() if hovered_card else 0
         current_player = self.gm.current_player
         for card in current_player.hand:
             rect = self.get_card_rect_for_card(card, current_player)
@@ -431,6 +620,9 @@ class PygameUI:
                 msg_surface = self.font.render(self.message, True, COLOR_TEXT)
                 self.screen.blit(msg_surface, (WINDOW_WIDTH // 2 - msg_surface.get_width() // 2, 10))
                 self.message_timer = max(0, self.message_timer - self.clock.get_time())
+
+            # 绘制悬停提示（技能说明）
+            self._draw_tooltip()
         elif self.state == "game_over":
             self.draw_game_over()
 

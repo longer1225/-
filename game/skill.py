@@ -469,34 +469,54 @@ class Skill_27(Skill):
 class Skill_28(Skill):
     """玩家打出这张牌，先抽两张牌到手牌，再弃掉自己选择的两张牌"""
     def __init__(self):
-        super().__init__("先抽再弃", targets_required=2, target_side="self", target_type="hand")
+        # 改为出牌前不要求目标，出牌后在 UI 中选择要弃的两张手牌
+        super().__init__("先抽再弃", targets_required=0, target_side="self", target_type="none")
 
     def apply(self, action):
         # --- 第一步：抽两张牌 ---
         if not getattr(action, 'manager', None):
             raise RuntimeError(f"{self.name} 需要 PlayAction.manager 来抽牌")
-        
+
         new_cards = []
         for _ in range(2):
             new_card = action.manager.draw_card_for_player(action.owner)
             if new_card:
                 action.owner.hand.append(new_card)
                 new_cards.append(new_card)
-        
-        msg = f"[{self.name}] {action.owner.name} 抽到 {[c.name for c in new_cards]}"
+
+        if new_cards:
+            msg = f"[{self.name}] {action.owner.name} 抽到 {[c.name for c in new_cards]}"
+        else:
+            msg = f"[{self.name}] 未能抽到新牌"
         if getattr(action, 'ui', None):
             action.ui.add_log(msg)
         else:
             print(msg)
 
-        # --- 第二步：弃掉玩家选择的两张牌 ---
-        targets = self.validate_targets(action)
-        for card in targets:
-            if card in action.owner.hand:
-                action.owner.hand.remove(card)
-                msg = f"[{self.name}] {action.owner.name} 弃掉 {card.name}"
-                if getattr(action, 'ui', None):
-                    action.ui.add_log(msg)
+        # --- 第二步：弃掉玩家选择的两张牌（在抽牌后进行选择） ---
+        discard_cards = []
+        ui = getattr(action, 'ui', None)
+        owner = action.owner
+        # 如果有 UI，弹出专用选择器让玩家从当前手牌中选择两张弃掉
+        if ui and hasattr(ui, 'select_cards_from_hand'):
+            prompt = "请选择要弃掉的两张手牌（再次点击可取消选择），然后点击确认"
+            try:
+                discard_cards = ui.select_cards_from_hand(owner, 2, prompt)
+            except Exception as e:
+                # 回退到随机选择
+                discard_cards = []
+        # 无 UI 或选择失败时，随机弃置（尽力而为）
+        if not discard_cards:
+            take_n = min(2, len(owner.hand))
+            import random as _r
+            discard_cards = _r.sample(owner.hand, take_n) if take_n > 0 else []
+
+        for c in discard_cards:
+            if c in owner.hand:
+                owner.hand.remove(c)
+                msg = f"[{self.name}] {owner.name} 弃掉 {c.name}"
+                if ui:
+                    ui.add_log(msg)
                 else:
                     print(msg)
 
@@ -530,8 +550,14 @@ class Skill_35(Skill):
 
     def apply(self, action):
         owner = action.owner
-        owner.isolated_cards.append(action.self_card)
-        msg = f"[{self.name}] {action.self_card.name} 被放入孤立区"
+        card = action.self_card
+        # 如果错误地在战场中，移除之
+        if card in owner.battlefield_cards:
+            owner.battlefield_cards.remove(card)
+        # 确保只在孤立区存在一次
+        if card not in owner.isolated_cards:
+            owner.isolated_cards.append(card)
+        msg = f"[{self.name}] {card.name} 被放入孤立区"
         if getattr(action, 'ui', None):
             action.ui.add_log(msg)
         else:

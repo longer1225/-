@@ -38,7 +38,7 @@ class GameManager:
         num_cards = 6 if self.current_round == 1 else 2
         for player in self.players:
             for _ in range(num_cards):
-                card_number = random.randint(1, 10)
+                card_number = random.randint(1, 19)
                 card = create_card_by_number(card_number)
                 player.draw_card(card)
 

@@ -24,7 +24,7 @@ card_data_map = {
     16: {"points": 2, "is_isolated": False, "skills": [Skill_27()]},
     17: {"points": 2, "is_isolated": False, "skills": [Skill_28()]},
     18: {"points": 2, "is_isolated": False, "skills": [Skill_29()]},
-    19:{"points": -1, "is_isolated": False, "skills": [Skill_35()]}
+    19:{"points": -1, "is_isolated": True, "skills": [Skill_35()]}
 
 
     # ---------------- 通用技能卡 ----------------
@@ -44,7 +44,8 @@ def create_card_by_number(number: int) -> Card:
         name=str(number),
         points=data["points"],
         is_isolated=data["is_isolated"],
-        skills=data["skills"]
+        skills=data["skills"],
+        base_points=data["points"],
     )
 
 # ------------------ 测试 ------------------

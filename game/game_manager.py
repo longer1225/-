@@ -88,12 +88,14 @@ class GameManager:
                 continue
 
             # --- 阶段 2：选择目标（阻塞等待） ---
-            targets, enemies = [], []
-            if card.requires_target or card.requires_enemy:
+            # 若 UI 已经返回了目标/敌人，则不必再次等待选择
+            needs_target = card.requires_target and not targets
+            needs_enemy = card.requires_enemy and not enemies
+            if needs_target or needs_enemy:
                 message = []
-                if card.requires_target:
+                if needs_target:
                     message.append("选择目标卡牌")
-                if card.requires_enemy:
+                if needs_enemy:
                     message.append("选择敌方玩家")
                 ui.show_message(f"{player.name} 请{' 和 '.join(message)}！")
                 
@@ -103,23 +105,21 @@ class GameManager:
                     ui.draw_game()       # 刷新 UI
                     pygame.time.wait(50) # 控制帧率
 
-                    if card.requires_enemy and ui.enemy_list:
+                    if needs_enemy and ui.enemy_list:
                         enemies = ui.enemy_list
-                        if not card.requires_target:
-                            waiting_for_targets = False
+                        needs_enemy = False
                     
-                    if card.requires_target and ui.target_list:
+                    if needs_target and ui.target_list:
                         targets = ui.target_list
-                        if not card.requires_enemy:
-                            waiting_for_targets = False
+                        needs_target = False
                     
-                    if (not card.requires_target or targets) and (not card.requires_enemy or enemies):
+                    if not needs_target and not needs_enemy:
                         waiting_for_targets = False
 
-                # 重置选择状态
-                ui.selected_card = None
-                ui.target_list = []
-                ui.enemy_list = []
+            # 重置选择状态（无论是否进入等待环节，都清理一下以防残留）
+            ui.selected_card = None
+            ui.target_list = []
+            ui.enemy_list = []
 
             # --- 阶段 3：出牌 ---
             action = PlayAction(

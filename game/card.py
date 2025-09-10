@@ -14,6 +14,24 @@ class Card:
         self.skills = skills or []
         self.is_isolated = is_isolated
 
+        # 计算是否需要目标
+        self.requires_target = False
+        self.requires_enemy = False
+        self.target_type = "none"    # 目标类型：none/hand/battlefield/isolated
+        self.target_side = "self"    # 目标方：self/other/any
+        
+        # 从技能中获取目标要求
+        for skill in self.skills:
+            if skill.needs_target:
+                self.requires_target = True
+                self.target_type = skill.target_type
+                self.target_side = skill.target_side
+            if skill.needs_enemy:
+                self.requires_enemy = True
+
+        # UI相关属性
+        self.highlight = False  # 用于UI高亮显示
+
     def play(self, action):
         """
         出牌：
@@ -26,10 +44,18 @@ class Card:
         # 放入牌区
         if self.is_isolated:
             owner.isolated_cards.append(self)
-            print(f"{owner.name} 将 {self.name} 放入孤立区")
+            msg = f"{owner.name} 将 {self.name} 放入孤立区"
+            if getattr(action, 'ui', None):
+                action.ui.add_log(msg)
+            else:
+                print(msg)
         else:
             owner.battlefield_cards.append(self)
-            print(f"{owner.name} 将 {self.name} 放入战场")
+            msg = f"{owner.name} 将 {self.name} 放入战场"
+            if getattr(action, 'ui', None):
+                action.ui.add_log(msg)
+            else:
+                print(msg)
 
         # 触发技能
         for skill in self.skills:

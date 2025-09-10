@@ -77,7 +77,11 @@ class Skill_1(Skill):
     def apply(self, action):
         cards_on_board = action.board.get_player_zone(action.owner, "battlefield")
         action.self_card.points += len(cards_on_board)
-        print(f"[{self.name}] {action.self_card.name} 点数增加到 {action.self_card.points}")
+        msg = f"[{self.name}] {action.self_card.name} 点数增加到 {action.self_card.points}"
+        if getattr(action, 'ui', None):
+            action.ui.add_log(msg)
+        else:
+            print(msg)
 
 
 class Skill_2(Skill):
@@ -89,7 +93,9 @@ class Skill_2(Skill):
         cards_on_board = action.board.get_player_zone(action.owner, "battlefield")
         if len(cards_on_board) == 1 and cards_on_board[0] == action.self_card:
             action.self_card.points += 5
-            print(f"[{self.name}] {action.self_card.name} 点数增加到 {action.self_card.points}")
+            msg = f"[{self.name}] {action.self_card.name} 点数增加到 {action.self_card.points}"
+            if getattr(action, 'ui', None): action.ui.add_log(msg)
+            else: print(msg)
 
 
 class Skill_3(Skill):
@@ -98,9 +104,37 @@ class Skill_3(Skill):
         super().__init__("援助", targets_required=1, target_side="any", target_type="battlefield")
 
     def apply(self, action):
-        target_card = self.validate_targets(action)[0]
+        # 首先获取目标牌所在的玩家区域
+        targets = self.validate_targets(action)
+        if not targets:
+            msg = f"[{self.name}] 错误：没有选择目标卡牌"
+            if getattr(action, 'ui', None): action.ui.add_log(msg)
+            else: print(msg)
+            return
+
+        target_card = targets[0]
+        target_player = None
+
+        # 查找目标卡牌所属的玩家
+        for player in action.board.players:
+            cards = action.board.get_player_zone(player, "battlefield")
+            if target_card in cards:
+                target_player = player
+                break
+
+        if not target_player:
+            msg = f"[{self.name}] 错误：找不到目标卡牌所属的玩家"
+            if getattr(action, 'ui', None): action.ui.add_log(msg)
+            else: print(msg)
+            return
+        
+        # 执行援助效果
         target_card.points += 2
-        print(f"[{self.name}] {target_card.name} 被加2点，现在 {target_card.points}")
+        msg = f"[{self.name}] {target_player.name}的{target_card.name}被加2点，现在{target_card.points}点"
+        if getattr(action, 'ui', None):
+            action.ui.add_log(msg)
+        else:
+            print(msg)
 
 
 class Skill_4(Skill):
@@ -112,7 +146,9 @@ class Skill_4(Skill):
     def apply(self, action):
         if getattr(action.owner, "prev_round_won", False):
             action.owner.score += self.points
-            print(f"[{self.name}] {action.owner.name} 得分 +{self.points}，总分 {action.owner.score}")
+            msg = f"[{self.name}] {action.owner.name} 得分 +{self.points}，总分 {action.owner.score}"
+            if getattr(action, 'ui', None): action.ui.add_log(msg)
+            else: print(msg)
 
 
 class Skill_5(Skill):
@@ -123,20 +159,29 @@ class Skill_5(Skill):
     def apply(self, action):
         if not getattr(action.owner, "prev_round_won", False):
             action.owner.score += 3
-            print(f"[{self.name}] {action.owner.name} 上一回合失败，获得安慰奖 +3，总分 {action.owner.score}")
+            msg = f"[{self.name}] {action.owner.name} 上一回合失败，获得安慰奖 +3，总分 {action.owner.score}"
+            if getattr(action, 'ui', None): action.ui.add_log(msg)
+            else: print(msg)
 
 
 class Skill_6(Skill):
     """抽取一张牌到手牌区（注意：使用 action.manager）"""
     def __init__(self):
-        super().__init__("摸牌", targets_required=0, target_side="self")
+        super().__init__("摸牌", targets_required=0, target_side="self", target_type="none")
 
     def apply(self, action):
         if not getattr(action, 'manager', None):
             raise RuntimeError(f"{self.name} 需要 PlayAction.manager 来抽牌，请在创建 PlayAction 时传入 game manager")
         new_card = action.manager.draw_card_for_player(action.owner)
-        action.owner.hand.append(new_card)
-        print(f"[{self.name}] {action.owner.name} 抽到 {new_card.name}")
+        if new_card:
+            action.owner.hand.append(new_card)
+            msg = f"[{self.name}] {action.owner.name} 抽到 {new_card.name}"
+            if getattr(action, 'ui', None): action.ui.add_log(msg)
+            else: print(msg)
+        else:
+            msg = f"[{self.name}] {action.owner.name} 没有抽到牌"
+            if getattr(action, 'ui', None): action.ui.add_log(msg)
+            else: print(msg)
 
 
 class Skill_7(Skill):
@@ -150,7 +195,11 @@ class Skill_7(Skill):
             zone = action.board.get_player_zone(player, "battlefield")
             if target_card in zone:
                 zone.remove(target_card)
-                print(f"[{self.name}] 消灭了 {player.name} 的 {target_card.name}")
+                msg = f"[{self.name}] 消灭了 {player.name} 的 {target_card.name}"
+                if getattr(action, 'ui', None):
+                    action.ui.add_log(msg)
+                else:
+                    print(msg)
                 break
 
 
@@ -164,7 +213,9 @@ class Skill_8(Skill):
         count_8 = sum(1 for c in cards_on_board if c.name == "8" and c != action.self_card)
         if count_8 > 0:
             action.self_card.points += 3 * count_8
-            print(f"[{self.name}] {action.self_card.name} 技能触发，加点后 {action.self_card.points}")
+            msg = f"[{self.name}] {action.self_card.name} 技能触发，加点后 {action.self_card.points}"
+            if getattr(action, 'ui', None): action.ui.add_log(msg)
+            else: print(msg)
 
 
 class Skill_9(Skill):
@@ -183,7 +234,11 @@ class Skill_9(Skill):
 
         owner_point = random.randint(1, 6)
         target_point = random.randint(1, 6)
-        print(f"[{self.name}] 拼点 {action.owner.name} 掷出 {owner_point} vs {target_player.name} 掷出 {target_point}")
+        msg = f"[{self.name}] 拼点 {action.owner.name} 掷出 {owner_point} vs {target_player.name} 掷出 {target_point}"
+        if getattr(action, 'ui', None):
+            action.ui.add_log(msg)
+        else:
+            print(msg)
 
         if owner_point > target_point:
             # 出牌者获胜 → 出牌者摸牌，目标弃牌
@@ -191,12 +246,16 @@ class Skill_9(Skill):
                 raise RuntimeError(f"{self.name} 需要 PlayAction.manager 来抽牌，请在创建 PlayAction 时传入 game manager")
             new_card = action.manager.draw_card_for_player(action.owner)
             action.owner.hand.append(new_card)
-            print(f"[{self.name}] {action.owner.name} 获胜，抽到 {new_card.name}")
+            msg = f"[{self.name}] {action.owner.name} 获胜，抽到 {new_card.name}"
+            if getattr(action, 'ui', None): action.ui.add_log(msg)
+            else: print(msg)
 
             if target_player.hand:
                 discarded = random.choice(target_player.hand)
                 target_player.hand.remove(discarded)
-                print(f"[{self.name}] {target_player.name} 弃掉 {discarded.name}")
+                msg = f"[{self.name}] {target_player.name} 弃掉 {discarded.name}"
+                if getattr(action, 'ui', None): action.ui.add_log(msg)
+                else: print(msg)
 
         elif owner_point < target_point:
             # 目标获胜 → 目标摸牌，出牌者弃牌
@@ -204,15 +263,21 @@ class Skill_9(Skill):
                 raise RuntimeError(f"{self.name} 需要 PlayAction.manager 来抽牌，请在创建 PlayAction 时传入 game manager")
             new_card = action.manager.draw_card_for_player(target_player)
             target_player.hand.append(new_card)
-            print(f"[{self.name}] {target_player.name} 获胜，抽到 {new_card.name}")
+            msg = f"[{self.name}] {target_player.name} 获胜，抽到 {new_card.name}"
+            if getattr(action, 'ui', None): action.ui.add_log(msg)
+            else: print(msg)
 
             if action.owner.hand:
                 discarded = random.choice(action.owner.hand)
                 action.owner.hand.remove(discarded)
-                print(f"[{self.name}] {action.owner.name} 弃掉 {discarded.name}")
+                msg = f"[{self.name}] {action.owner.name} 弃掉 {discarded.name}"
+                if getattr(action, 'ui', None): action.ui.add_log(msg)
+                else: print(msg)
 
         else:
-            print(f"[{self.name}] 平局，无事发生")
+            msg = f"[{self.name}] 平局，无事发生"
+            if getattr(action, 'ui', None): action.ui.add_log(msg)
+            else: print(msg)
 
 
 class Skill_10(Skill):
@@ -223,4 +288,8 @@ class Skill_10(Skill):
     def apply(self, action):
         rand_points = random.randint(1, 6)
         action.self_card.points += rand_points
-        print(f"[{self.name}] {action.self_card.name} 随机加 {rand_points} 点，现在 {action.self_card.points}")
+        msg = f"[{self.name}] {action.self_card.name} 随机加 {rand_points} 点，现在 {action.self_card.points}"
+        if getattr(action, 'ui', None):
+            action.ui.add_log(msg)
+        else:
+            print(msg)

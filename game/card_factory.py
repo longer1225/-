@@ -7,7 +7,7 @@ from .skill import *
 # 每张牌的点数、孤立状态和技能列表
 card_data_map = {
     1: {"points": 1, "is_isolated": False, "skills": [Skill_1()]},
-    2: {"points": -1, "is_isolated": True, "skills": [Skill_2()]},
+    2: {"points": -1, "is_isolated": False, "skills": [Skill_2()]},
     3: {"points": 2, "is_isolated": False, "skills": [Skill_3()]},
     4: {"points": 0, "is_isolated": False, "skills": [Skill_4()]},
     5: {"points": 0, "is_isolated": False, "skills": [Skill_5()]},

@@ -14,38 +14,38 @@ def main():
     gm = GameManager(players=[])
     ui.set_manager(gm)
 
-    clock = pygame.time.Clock()
-    FPS = 30
-
     # 游戏主循环
-    running = True
-    while running:
-        ui.handle_events()
-
+    while ui.running:
         # ---------------- 菜单逻辑 ----------------
         if ui.state == "menu":
-            ui.draw()
+            # 仅在菜单态处理事件与绘制
+            ui.handle_events()
+            ui.draw_game()
+            ui.clock.tick(30)
 
         # ---------------- 游戏逻辑 ----------------
         elif ui.state == "game":
-            # 确保玩家同步
-            ui.players = gm.players
-            ui.current_player_index = gm.current_player_index
-
-            ui.draw()
-
-            # 在这里让 GameManager 驱动小局逻辑
+            # 将事件消费与界面刷新交给 GameManager/UI 的内部等待循环，避免重复消费事件
             if gm.current_round < gm.total_rounds:
                 winners = gm.play_small_round(ui)
-                print("小局胜者:", [p.name for p in winners])
+                if winners:
+                    ui.add_log(f"小局胜者: {', '.join(p.name for p in winners)}")
 
-                # 检查是否有大局胜利者
+                # 检查是否有大局胜利者（例如先至2胜）
                 overall_winners = gm.show_winner()
                 if any(gm.small_rounds_won[p.name] >= 2 for p in gm.players):
-                    print("大局胜者:", overall_winners)
-                    running = False
-
-        clock.tick(FPS)
+                    # 展示游戏结束界面
+                    ui.show_game_over(overall_winners)
+            else:
+                # 到达预设小局数上限时，直接根据当前比分展示结束界面
+                overall_winners = gm.show_winner()
+                ui.show_game_over(overall_winners)
+        
+        # ---------------- 结束界面逻辑 ----------------
+        elif ui.state == "game_over":
+            ui.handle_events()
+            ui.draw_game()
+            ui.clock.tick(30)
 
     pygame.quit()
     sys.exit()

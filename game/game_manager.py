@@ -44,7 +44,7 @@ class GameManager:
 
     def draw_card_for_player(self, player):
         """为指定玩家抽一张牌"""
-        card_number = random.randint(1, 10)
+        card_number = random.randint(1, 19)
         card = create_card_by_number(card_number)
         return card
 

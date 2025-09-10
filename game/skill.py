@@ -20,7 +20,7 @@ class Skill(ABC):
         :param name: 技能名称
         :param targets_required: 需要多少张牌作为目标（牌目标）
         :param enemy_required: 需要多少个敌人作为目标（玩家目标）
-        :param target_side: 目标是 哪个玩家
+        :param target_side: 目标牌是 哪个玩家的
             - "self"   自己
             - "other"  只能选择其他玩家
             - "any"    自己和他人都可以
@@ -92,7 +92,7 @@ class Skill_2(Skill):
     def apply(self, action):
         cards_on_board = action.board.get_player_zone(action.owner, "battlefield")
         if len(cards_on_board) == 1 and cards_on_board[0] == action.self_card:
-            action.self_card.points += 5
+            action.self_card.points += 4
             msg = f"[{self.name}] {action.self_card.name} 点数增加到 {action.self_card.points}"
             if getattr(action, 'ui', None): action.ui.add_log(msg)
             else: print(msg)
@@ -289,6 +289,249 @@ class Skill_10(Skill):
         rand_points = random.randint(1, 6)
         action.self_card.points += rand_points
         msg = f"[{self.name}] {action.self_card.name} 随机加 {rand_points} 点，现在 {action.self_card.points}"
+        if getattr(action, 'ui', None):
+            action.ui.add_log(msg)
+        else:
+            print(msg)
+
+class Skill_11(Skill):
+    """
+    弃掉自己手上所有手牌，然后抽取等量的新牌
+    """
+    def __init__(self):
+        super().__init__("手牌重置", targets_required=0, target_side="self", target_type="hand")
+
+    def apply(self, action):
+        if not getattr(action, 'manager', None):
+            raise RuntimeError(f"{self.name} 需要 PlayAction.manager 来抽牌，请在创建 PlayAction 时传入 game manager")
+
+        hand_size = len(action.owner.hand)
+        if hand_size == 0:
+            msg = f"[{self.name}] {action.owner.name} 没有手牌，无法触发效果"
+            if getattr(action, 'ui', None): action.ui.add_log(msg)
+            else: print(msg)
+            return
+
+        # 弃掉所有手牌
+        discarded_cards = list(action.owner.hand)  # 复制以便打印
+        action.owner.hand.clear()
+
+        # 抽取等量新牌
+        new_cards = []
+        for _ in range(hand_size):
+            new_card = action.manager.draw_card_for_player(action.owner)
+            if new_card:
+                action.owner.hand.append(new_card)
+                new_cards.append(new_card)
+
+        msg = (f"[{self.name}] {action.owner.name} 弃掉了 {', '.join(c.name for c in discarded_cards)}，"
+               f"并抽取了 {len(new_cards)} 张新牌：{', '.join(c.name for c in new_cards)}")
+        if getattr(action, 'ui', None): action.ui.add_log(msg)
+        else: print(msg)
+
+class Skill_16(Skill):
+    """抽取两张牌到手牌区"""
+    def __init__(self):
+        super().__init__("双抽", targets_required=0, target_side="self", target_type="none")
+
+    def apply(self, action):
+        if not getattr(action, 'manager', None):
+            raise RuntimeError(f"{self.name} 需要 PlayAction.manager 来抽牌，请在创建 PlayAction 时传入 game manager")
+
+        new_cards = []
+        for _ in range(2):  # 抽两张牌
+            card = action.manager.draw_card_for_player(action.owner)
+            if card:
+                action.owner.hand.append(card)
+                new_cards.append(card)
+
+        if new_cards:
+            msg = f"[{self.name}] {action.owner.name} 抽到 {', '.join(c.name for c in new_cards)}"
+        else:
+            msg = f"[{self.name}] {action.owner.name} 没有抽到牌"
+
+        if getattr(action, 'ui', None):
+            action.ui.add_log(msg)
+        else:
+            print(msg)
+
+class Skill_21(Skill):
+    """选择一名玩家的战场牌，使其点数翻倍"""
+    def __init__(self):
+        super().__init__("加倍打击", targets_required=1, target_side="any", target_type="battlefield")
+
+    def apply(self, action):
+        # 获取目标牌
+        targets = self.validate_targets(action)
+        if not targets:
+            msg = f"[{self.name}] 没有选择目标卡牌"
+            if getattr(action, 'ui', None): action.ui.add_log(msg)
+            else: print(msg)
+            return
+
+        target_card = targets[0]
+
+        # 查找目标牌所属玩家
+        target_player = None
+        for player in action.board.players:
+            if target_card in action.board.get_player_zone(player, "battlefield"):
+                target_player = player
+                break
+
+        if not target_player:
+            msg = f"[{self.name}] 找不到目标卡牌所属玩家"
+            if getattr(action, 'ui', None): action.ui.add_log(msg)
+            else: print(msg)
+            return
+
+        # 执行翻倍效果
+        old_points = target_card.points
+        target_card.points *= 2
+        msg = f"[{self.name}] {target_player.name} 的 {target_card.name} 点数 {old_points} -> {target_card.points}"
+        if getattr(action, 'ui', None): action.ui.add_log(msg)
+        else: print(msg)
+
+class Skill_23(Skill):
+    """出牌时，点数增加玩家手牌数，但最多增加5点"""
+    def __init__(self):
+        super().__init__("手牌加成", targets_required=0, target_side="self")
+
+    def apply(self, action):
+        owner = action.owner
+        hand_count = len(owner.hand)
+        increment = min(hand_count, 5)  # 限制最多加5点
+        action.self_card.points += increment
+        msg = f"[{self.name}] {action.self_card.name} 出牌触发，手牌数 {hand_count}，点数增加 {increment} 到 {action.self_card.points}"
+        if getattr(action, 'ui', None):
+            action.ui.add_log(msg)
+        else:
+            print(msg)
+
+class Skill_26(Skill):
+    """出牌时，选择一名敌人玩家，随机抽取一张手牌加入自己手牌区"""
+    def __init__(self):
+        super().__init__("掠夺", targets_required=0, enemy_required=1, target_side="other")
+
+    def apply(self, action):
+        # 验证并获取目标敌人
+        target_player = self.validate_enemies(action)[0]
+
+        if not target_player.hand:
+            msg = f"[{self.name}] {target_player.name} 没有手牌可抽"
+            if getattr(action, 'ui', None): 
+                action.ui.add_log(msg)
+            else: 
+                print(msg)
+            return
+
+        # 随机选择一张手牌
+        stolen_card = random.choice(target_player.hand)
+        target_player.hand.remove(stolen_card)
+        action.owner.hand.append(stolen_card)
+
+        msg = f"[{self.name}] {action.owner.name} 从 {target_player.name} 手牌中抽取 {stolen_card.name}"
+        if getattr(action, 'ui', None):
+            action.ui.add_log(msg)
+        else:
+            print(msg)
+
+class Skill_27(Skill):
+    """敌人战场牌数多于自己时，选择任意玩家的战场牌+3"""
+    def __init__(self):
+        super().__init__("战场优势加点", targets_required=1, enemy_required=1, target_side="any", target_type="battlefield")
+
+    def apply(self, action):
+        # 验证敌人目标
+        enemy = self.validate_enemies(action)[0]
+
+        player_board_count = len(action.board.get_player_zone(action.owner, "battlefield"))
+        enemy_board_count = len(action.board.get_player_zone(enemy, "battlefield"))
+
+        if enemy_board_count > player_board_count:
+            # 验证玩家选择的目标牌
+            targets = self.validate_targets(action)
+            if not targets:
+                msg = f"[{self.name}] 错误：没有选择目标卡牌"
+                if getattr(action, 'ui', None): action.ui.add_log(msg)
+                else: print(msg)
+                return
+
+            target_card = targets[0]
+            target_card.points += 3
+            msg = f"[{self.name}] {target_card.name} 被加 3 点，当前点数 {target_card.points}"
+            if getattr(action, 'ui', None): action.ui.add_log(msg)
+            else: print(msg)
+        else:
+            msg = f"[{self.name}] 条件不满足，{enemy.name} 战场牌数 ({enemy_board_count}) ≤ {action.owner.name} 战场牌数 ({player_board_count})"
+            if getattr(action, 'ui', None): action.ui.add_log(msg)
+            else: print(msg)
+
+class Skill_28(Skill):
+    """玩家打出这张牌，先抽两张牌到手牌，再弃掉自己选择的两张牌"""
+    def __init__(self):
+        super().__init__("先抽再弃", targets_required=2, target_side="self", target_type="hand")
+
+    def apply(self, action):
+        # --- 第一步：抽两张牌 ---
+        if not getattr(action, 'manager', None):
+            raise RuntimeError(f"{self.name} 需要 PlayAction.manager 来抽牌")
+        
+        new_cards = []
+        for _ in range(2):
+            new_card = action.manager.draw_card_for_player(action.owner)
+            if new_card:
+                action.owner.hand.append(new_card)
+                new_cards.append(new_card)
+        
+        msg = f"[{self.name}] {action.owner.name} 抽到 {[c.name for c in new_cards]}"
+        if getattr(action, 'ui', None):
+            action.ui.add_log(msg)
+        else:
+            print(msg)
+
+        # --- 第二步：弃掉玩家选择的两张牌 ---
+        targets = self.validate_targets(action)
+        for card in targets:
+            if card in action.owner.hand:
+                action.owner.hand.remove(card)
+                msg = f"[{self.name}] {action.owner.name} 弃掉 {card.name}"
+                if getattr(action, 'ui', None):
+                    action.ui.add_log(msg)
+                else:
+                    print(msg)
+
+class Skill_29(Skill):
+    """选择一名敌人，敌方战场比自己多的牌数 -> 本牌点数+1/张"""
+    def __init__(self):
+        super().__init__("战场压制", targets_required=0, enemy_required=1, target_side="other", target_type="battlefield")
+
+    def apply(self, action):
+        target_player = self.validate_enemies(action)[0]
+        owner = action.owner
+        owner_board_count = len(owner.battlefield_cards)
+        target_board_count = len(target_player.battlefield_cards)
+        diff = target_board_count - owner_board_count
+
+        if diff > 0:
+            action.self_card.points += diff
+            msg = f"[{self.name}] {action.self_card.name} 点数增加 {diff}，现在 {action.self_card.points}"
+        else:
+            msg = f"[{self.name}] 技能无法生效：{target_player.name} 战场牌数不多于 {owner.name}"
+
+        if getattr(action, 'ui', None):
+            action.ui.add_log(msg)
+        else:
+            print(msg)
+
+class Skill_35(Skill):
+    """打出这张牌放入孤立区，没有其他效果"""
+    def __init__(self):
+        super().__init__("孤立放置", targets_required=0, enemy_required=0, target_side="self", target_type="none")
+
+    def apply(self, action):
+        owner = action.owner
+        owner.isolated_cards.append(action.self_card)
+        msg = f"[{self.name}] {action.self_card.name} 被放入孤立区"
         if getattr(action, 'ui', None):
             action.ui.add_log(msg)
         else:

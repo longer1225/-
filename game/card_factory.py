@@ -9,13 +9,24 @@ card_data_map = {
     1: {"points": 1, "is_isolated": False, "skills": [Skill_1()]},
     2: {"points": -1, "is_isolated": False, "skills": [Skill_2()]},
     3: {"points": 2, "is_isolated": False, "skills": [Skill_3()]},
-    4: {"points": 0, "is_isolated": False, "skills": [Skill_4()]},
-    5: {"points": 0, "is_isolated": False, "skills": [Skill_5()]},
+    4: {"points": 3, "is_isolated": False, "skills": [Skill_4()]},
+    5: {"points": 3, "is_isolated": False, "skills": [Skill_5()]},
     6: {"points": 0, "is_isolated": False, "skills": [Skill_6()]},
-    7: {"points": 5, "is_isolated": False, "skills": [Skill_7()]},
-    8: {"points": 4, "is_isolated": False, "skills": [Skill_8()]},
+    7: {"points": 0, "is_isolated": False, "skills": [Skill_7()]},
+    8: {"points": 3, "is_isolated": False, "skills": [Skill_8()]},
     9: {"points": 3, "is_isolated": False, "skills": [Skill_9()]},
-    10: {"points": 2, "is_isolated": False, "skills": [Skill_10()]},
+    10: {"points": 0, "is_isolated": False, "skills": [Skill_10()]},
+    11: {"points": 2, "is_isolated": False, "skills": [Skill_11()]},
+    12: {"points": -3, "is_isolated": False, "skills": [Skill_16()]},
+    13: {"points": 0, "is_isolated": False, "skills": [Skill_21()]},
+    14: {"points": 0, "is_isolated": False, "skills": [Skill_23()]},
+    15: {"points": -3, "is_isolated": False, "skills": [Skill_26()]},
+    16: {"points": 2, "is_isolated": False, "skills": [Skill_27()]},
+    17: {"points": 2, "is_isolated": False, "skills": [Skill_28()]},
+    18: {"points": 2, "is_isolated": False, "skills": [Skill_29()]},
+    19:{"points": -1, "is_isolated": False, "skills": [Skill_35()]}
+
+
     # ---------------- 通用技能卡 ----------------
 }
 

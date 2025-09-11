@@ -1,4 +1,5 @@
 import pygame
+import os
 import sys
 from typing import Optional, Dict, Any, List, cast
 from game.player import Player
@@ -27,8 +28,10 @@ class PygameUI:
         ]
         self.font = pygame.font.SysFont(font_candidates, 24)
         self.small_font = pygame.font.SysFont(font_candidates, 16)
-        # 背景水印字号稍大一些，增强可见度但不过度抢眼
-        self.wm_font = pygame.font.SysFont(font_candidates, 32)
+        # 背景水印字号放大以增强区域辨识度
+        self.wm_font = pygame.font.SysFont(font_candidates, 40)
+        # 主页大标题字体
+        self.title_font = pygame.font.SysFont(font_candidates, 72)
         self.clock = pygame.time.Clock()
 
         # 游戏状态
@@ -57,6 +60,51 @@ class PygameUI:
         self.card_left = 150
         # 固定卡宽（每局开始时计算一次，之后不再改变）
         self.fixed_card_width = None
+
+        # 卡牌背景图
+        self.card_bg = None
+        self.card_bg_scaled = None
+        try:
+            img_path = os.path.join(os.path.dirname(__file__), "images", "card.jpeg")
+            if os.path.exists(img_path):
+                self.card_bg = pygame.image.load(img_path).convert_alpha()
+        except Exception:
+            self.card_bg = None
+
+        # 全局背景图
+        self.bg_image = None
+        self.bg_scaled = None
+        try:
+            bg_path = os.path.join(os.path.dirname(__file__), "images", "bkg.jpg")
+            if os.path.exists(bg_path):
+                self.bg_image = pygame.image.load(bg_path).convert()
+        except Exception:
+            self.bg_image = None
+
+        # 通用按钮背景图
+        self.btn_image = None
+        try:
+            btn_path = os.path.join(os.path.dirname(__file__), "images", "btn.png")
+            if os.path.exists(btn_path):
+                self.btn_image = pygame.image.load(btn_path).convert_alpha()
+        except Exception:
+            self.btn_image = None
+
+        # 标题背景图（主页大标题横幅）
+        self.title_image = None
+        try:
+            title_dir = os.path.join(os.path.dirname(__file__), "images")
+            for name in ("title.png", "title.jpg", "title.jpeg"):
+                p = os.path.join(title_dir, name)
+                if os.path.exists(p):
+                    # png 用 alpha，jpg 用 convert
+                    if name.endswith(".png"):
+                        self.title_image = pygame.image.load(p).convert_alpha()
+                    else:
+                        self.title_image = pygame.image.load(p).convert()
+                    break
+        except Exception:
+            self.title_image = None
 
         # 悬停提示（技能说明）
         self.hover_card = None            # 当前鼠标悬停的卡牌
@@ -100,11 +148,23 @@ class PygameUI:
             text_surface = self.font.render(text, True, COLOR_TEXT)
             max_text_w = max(max_text_w, text_surface.get_width())
         self.fixed_card_width = max(self.card_width, max_text_w + 16)
+        self._update_card_bg_scaled()
 
     def fix_card_width_for_round(self) -> None:
         """供小局开始时调用：根据全卡池测量并锁定当局卡宽。"""
         self.fixed_card_width = None
         self._ensure_fixed_card_width()
+
+    def _update_card_bg_scaled(self) -> None:
+        """根据当前固定卡宽与卡高，缩放卡牌背景图。"""
+        if self.card_bg and self.fixed_card_width:
+            try:
+                size = (int(self.fixed_card_width), int(self.card_height))
+                self.card_bg_scaled = pygame.transform.smoothscale(self.card_bg, size)
+            except Exception:
+                self.card_bg_scaled = None
+        else:
+            self.card_bg_scaled = None
 
     def compute_live_score(self, player: Player) -> int:
         """实时计算玩家当前分数（战场+孤立区点数和）。"""
@@ -193,9 +253,7 @@ class PygameUI:
             # 绘制界面（按钮与已选高亮）
             self.draw_game()
             # 绘制确认按钮（覆盖在底部日志上层）
-            pygame.draw.rect(self.screen, COLOR_HIGHLIGHT if len(chosen) == count else COLOR_ZONE, confirm_rect)
-            label = self.font.render("确认", True, COLOR_TEXT)
-            self.screen.blit(label, (confirm_rect.x + 35, confirm_rect.y + 5))
+            self._draw_btn(confirm_rect, "确认", enabled=(len(chosen) == count))
 
             # 在当前玩家手牌中高亮已选卡牌
             # 这里不直接改 card.highlight，避免干扰 hover；只在按钮旁边列出已选
@@ -505,14 +563,16 @@ class PygameUI:
 
     def handle_menu_click(self, x: int, y: int) -> None:
         """处理菜单点击"""
-        # 选择人数
-        for i, num in enumerate([2, 3, 4]):
-            rect = pygame.Rect(WINDOW_WIDTH // 2 - 50, 200 + i * 60, 100, 40)
-            if rect.collidepoint(x, y):
-                self.selected_num = num
+        # 与 draw_menu 中的位置保持一致（仅2人可点击）
+        banner_rect = pygame.Rect(WINDOW_WIDTH // 2 - 360, 80, 720, 120)
+        prompt_y = banner_rect.bottom + 30
+        first_btn_y = prompt_y + 60
+        rect_2p = pygame.Rect(WINDOW_WIDTH // 2 - 90, first_btn_y, 180, 60)
+        if rect_2p.collidepoint(x, y):
+            self.selected_num = 2
 
         # 开始游戏
-        start_rect = pygame.Rect(WINDOW_WIDTH // 2 - 50, 400, 100, 40)
+        start_rect = pygame.Rect(WINDOW_WIDTH // 2 - 160, first_btn_y + 3 * 76 + 30, 320, 90)
         if start_rect.collidepoint(x, y) and self.selected_num and self.gm:
             self.gm.players = [Player(f"玩家{i+1}", i) for i in range(self.selected_num)]
             self.gm.setup_board()
@@ -601,7 +661,6 @@ class PygameUI:
         """处理鼠标移动"""
         if not self.gm or not self.gm.current_player:
             return
-            
         x, y = pos
         # 更新鼠标位置与悬停状态
         self.mouse_pos = (x, y)
@@ -619,7 +678,19 @@ class PygameUI:
 
     def draw_game(self) -> None:
         """绘制游戏界面"""
-        self.screen.fill(COLOR_BG)
+        # 全局背景：若有图则平滑缩放铺满，否则使用纯色
+        if self.bg_image:
+            if (not self.bg_scaled) or (self.bg_scaled.get_width() != WINDOW_WIDTH or self.bg_scaled.get_height() != WINDOW_HEIGHT):
+                try:
+                    self.bg_scaled = pygame.transform.smoothscale(self.bg_image, (WINDOW_WIDTH, WINDOW_HEIGHT))
+                except Exception:
+                    self.bg_scaled = None
+            if self.bg_scaled:
+                self.screen.blit(self.bg_scaled, (0, 0))
+            else:
+                self.screen.fill(COLOR_BG)
+        else:
+            self.screen.fill(COLOR_BG)
         
         if self.state == "menu":
             self.draw_menu()
@@ -631,18 +702,11 @@ class PygameUI:
             # 先绘制底部日志框，按钮稍后再画在其上层
             self.draw_log_panel()
 
-            # 绘制出牌按钮（在日志之上）
+            # 绘制出牌/结束回合按钮（在日志之上）
             play_card_rect = pygame.Rect(WINDOW_WIDTH - 300, WINDOW_HEIGHT - 60, 120, 40)
-            play_color = COLOR_HIGHLIGHT if self.selected_card else COLOR_ZONE
-            pygame.draw.rect(self.screen, play_color, play_card_rect)
-            label = self.font.render("出牌", True, COLOR_TEXT)
-            self.screen.blit(label, (play_card_rect.x + 35, play_card_rect.y + 5))
-
-            # 绘制结束回合按钮
             end_turn_rect = pygame.Rect(WINDOW_WIDTH - 150, WINDOW_HEIGHT - 60, 120, 40)
-            pygame.draw.rect(self.screen, COLOR_HIGHLIGHT, end_turn_rect)
-            label = self.font.render("结束回合", True, COLOR_TEXT)
-            self.screen.blit(label, (end_turn_rect.x + 10, end_turn_rect.y + 5))
+            self._draw_btn(play_card_rect, "出牌", enabled=bool(self.selected_card))
+            self._draw_btn(end_turn_rect, "结束回合", enabled=True)
 
             # 绘制消息
             if self.message and self.message_timer > 0:
@@ -658,21 +722,41 @@ class PygameUI:
         pygame.display.flip()
 
     def draw_menu(self) -> None:
-        """绘制菜单界面"""
+        """绘制菜单界面（仅显示“2人”按钮，隐藏 3/4 人）"""
+        # 顶部大标题“萝卜牌”与标题背景板
+        banner_rect = pygame.Rect(WINDOW_WIDTH // 2 - 360, 80, 720, 120)
+        # 优先使用图片作为标题背景；无图时退回半透明底
+        if self.title_image:
+            try:
+                banner_img = pygame.transform.smoothscale(self.title_image, (banner_rect.width, banner_rect.height))
+                self.screen.blit(banner_img, banner_rect.topleft)
+            except Exception:
+                banner = pygame.Surface((banner_rect.width, banner_rect.height), pygame.SRCALPHA)
+                banner.fill((0, 0, 0, 120))
+                self.screen.blit(banner, banner_rect.topleft)
+        else:
+            banner = pygame.Surface((banner_rect.width, banner_rect.height), pygame.SRCALPHA)
+            banner.fill((0, 0, 0, 120))
+            self.screen.blit(banner, banner_rect.topleft)
+        title_big = self.title_font.render("萝卜牌", True, COLOR_TEXT)
+        self.screen.blit(title_big, (
+            banner_rect.x + (banner_rect.width - title_big.get_width()) // 2,
+            banner_rect.y + (banner_rect.height - title_big.get_height()) // 2,
+        ))
+
+        # 提示语下移
+        prompt_y = banner_rect.bottom + 30
         title = self.font.render("请选择玩家人数", True, COLOR_TEXT)
-        self.screen.blit(title, (WINDOW_WIDTH // 2 - 100, 100))
+        self.screen.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, prompt_y))
 
-        for i, num in enumerate([2, 3, 4]):
-            rect = pygame.Rect(WINDOW_WIDTH // 2 - 50, 200 + i * 60, 100, 40)
-            color = COLOR_HIGHLIGHT if self.selected_num == num else COLOR_ZONE
-            pygame.draw.rect(self.screen, color, rect)
-            label = self.font.render(f"{num}人", True, COLOR_TEXT)
-            self.screen.blit(label, (rect.x + 20, rect.y + 5))
+        # 仅显示“2人”按钮
+        first_btn_y = prompt_y + 60
+        rect_2p = pygame.Rect(WINDOW_WIDTH // 2 - 90, first_btn_y, 180, 60)
+        self._draw_btn(rect_2p, "2人", enabled=True, border=(self.selected_num == 2))
 
-        start_rect = pygame.Rect(WINDOW_WIDTH // 2 - 50, 400, 100, 40)
-        pygame.draw.rect(self.screen, COLOR_HIGHLIGHT if self.selected_num else COLOR_ZONE, start_rect)
-        label = self.font.render("开始游戏", True, COLOR_TEXT)
-        self.screen.blit(label, (start_rect.x + 5, start_rect.y + 5))
+        # “开始游戏”按钮
+        start_rect = pygame.Rect(WINDOW_WIDTH // 2 - 160, first_btn_y + 3 * 76 + 30, 320, 90)
+        self._draw_btn(start_rect, "开始游戏", enabled=bool(self.selected_num))
 
     def draw_game_over(self) -> None:
         """绘制大局结束界面：比分、胜者、操作按钮"""
@@ -699,12 +783,40 @@ class PygameUI:
         # 操作按钮
         menu_rect = pygame.Rect(WINDOW_WIDTH // 2 - 170, WINDOW_HEIGHT - 200, 150, 50)
         exit_rect = pygame.Rect(WINDOW_WIDTH // 2 + 20, WINDOW_HEIGHT - 200, 150, 50)
-        pygame.draw.rect(self.screen, COLOR_HIGHLIGHT, menu_rect)
-        pygame.draw.rect(self.screen, COLOR_HIGHLIGHT, exit_rect)
-        menu_label = self.font.render("返回主页", True, COLOR_TEXT)
-        exit_label = self.font.render("退出游戏", True, COLOR_TEXT)
-        self.screen.blit(menu_label, (menu_rect.x + (150 - menu_label.get_width()) // 2, menu_rect.y + 10))
-        self.screen.blit(exit_label, (exit_rect.x + (150 - exit_label.get_width()) // 2, exit_rect.y + 10))
+        self._draw_btn(menu_rect, "返回主页", enabled=True)
+        self._draw_btn(exit_rect, "退出游戏", enabled=True)
+
+    def _draw_btn(self, rect: pygame.Rect, text: str, enabled: bool = True, border: bool = False, font: Optional[pygame.font.Font] = None) -> None:
+        """绘制通用按钮：使用 btn.png 作为背景并居中文字。
+        - enabled=False 时覆盖半透明黑降低亮度。
+        - border=True 时绘制高亮边框（用于菜单选择态）。
+        """
+        # 背景
+        if self.btn_image:
+            try:
+                scaled = pygame.transform.smoothscale(self.btn_image, (rect.width, rect.height))
+                self.screen.blit(scaled, rect.topleft)
+            except Exception:
+                pygame.draw.rect(self.screen, COLOR_ZONE, rect)
+        else:
+            pygame.draw.rect(self.screen, COLOR_ZONE, rect)
+
+        # 禁用态遮罩
+        if not enabled:
+            dim = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+            dim.fill((0, 0, 0, 110))
+            self.screen.blit(dim, rect.topleft)
+
+        # 文字
+        use_font = font or self.font
+        label = use_font.render(text, True, COLOR_BTN_TEXT)
+        text_x = rect.x + (rect.width - label.get_width()) // 2
+        text_y = rect.y + (rect.height - label.get_height()) // 2
+        self.screen.blit(label, (text_x, text_y))
+
+        # 选中边框
+        if border:
+            pygame.draw.rect(self.screen, COLOR_HIGHLIGHT, rect, 2)
 
     def handle_game_over_click(self, x: int, y: int) -> None:
         """处理游戏结束界面的点击"""
@@ -774,7 +886,7 @@ class PygameUI:
 
         # 绘制玩家信息（在board左侧分行显示，避免遮挡牌）
         live_score = self.compute_live_score(player)
-        info_x = 20
+        info_x = 60
         info_y = base_y - 20
         name_surf = self.font.render(player.name, True, COLOR_TEXT)
         score_surf = self.small_font.render(f"分数: {live_score}", True, COLOR_TEXT)
@@ -839,10 +951,11 @@ class PygameUI:
             self.screen.blit(text_surface, (10, logs_top))
 
     def draw_zone(self, label: str, cards: List[Card], player: Player, zone_name: str, y: int, height: int = ZONE_HEIGHT) -> None:
-        """绘制卡牌区域（背景水印 + 卡牌）"""
-        # 背景水印文字（低透明度）
+        """绘制卡牌区域（仅大号水印 + 卡牌）"""
         zone_rect = pygame.Rect(140, y, WINDOW_WIDTH - 280, height)
-        wm = self.wm_font.render(label, True, (200, 200, 200))
+
+        # 中心水印（放大字号、低透明度）
+        wm = self.wm_font.render(label, True, (220, 220, 220))
         wm.set_alpha(40)
         wm_x = zone_rect.x + (zone_rect.width - wm.get_width()) // 2
         wm_y = zone_rect.y + (zone_rect.height - wm.get_height()) // 2
@@ -850,24 +963,53 @@ class PygameUI:
 
         rects = self._build_card_rects(cards, y)
         for card, rect in zip(cards, rects):
-            # 根据不同情况设置卡牌颜色
-            if card == self.selected_card:
-                color = COLOR_HIGHLIGHT  # 选中的卡牌
-            elif card in self.target_list:
-                color = (100, 200, 100)  # 被选为目标的卡牌显示为绿色
+            # 背景：使用卡牌背景图；若无则使用灰色填充
+            if self.card_bg_scaled:
+                self.screen.blit(self.card_bg_scaled, rect.topleft)
             else:
-                color = (100, 100, 100)  # 普通卡牌
+                pygame.draw.rect(self.screen, (80, 80, 80), rect)
 
-            pygame.draw.rect(self.screen, color, rect)
+            # 文字可读性（更柔和）：浅色渐变叠加 + 轻微描边阴影，而非纯黑遮罩
+            # 顶部标题区域：从透明过渡到浅白（不破坏背景饱和度）
+            title_band_h = 26
+            if title_band_h > 0:
+                title_grad = pygame.Surface((rect.width - 10, title_band_h), pygame.SRCALPHA)
+                for i in range(title_band_h):
+                    alpha = int(60 * (i / max(1, title_band_h - 1)))  # 0 -> 60
+                    pygame.draw.line(title_grad, (255, 255, 255, alpha), (0, i), (rect.width - 10, i))
+                self.screen.blit(title_grad, (rect.x + 5, rect.y + 4))
 
-            # 如果鼠标悬停在卡牌上
+            # 技能区域：从透明到更轻的浅白，避免压暗背景
+            line_y_start = rect.y + 35
+            skill_band_h = max(0, rect.height - (line_y_start - rect.y) - 6)
+            if skill_band_h > 0:
+                skill_grad = pygame.Surface((rect.width - 10, skill_band_h), pygame.SRCALPHA)
+                for i in range(skill_band_h):
+                    alpha = int(40 * (i / max(1, skill_band_h - 1)))  # 0 -> 40
+                    pygame.draw.line(skill_grad, (255, 255, 255, alpha), (0, i), (rect.width - 10, i))
+                self.screen.blit(skill_grad, (rect.x + 5, line_y_start))
+
+            # 边框颜色（状态反馈，采用更高对比度并加粗）
+            if card == self.selected_card:
+                border_color = (255, 200, 0)  # 选中：金色
+                border_thick = 3
+            elif card in self.target_list:
+                border_color = (50, 220, 120)  # 目标：明亮绿
+                border_thick = 3
+            else:
+                # 普通：浅灰
+                border_color = (180, 180, 180)
+                border_thick = 2
+            pygame.draw.rect(self.screen, border_color, rect, border_thick)
+
+            # 如果鼠标悬停在卡牌上（进一步强调）
             if hasattr(card, "highlight") and card.highlight:
                 pygame.draw.rect(self.screen, (255, 255, 0), rect, 3)
 
             # 绘制卡牌基本信息（卡名必须完整显示，卡片宽度已动态调整）
             card_info = f"{card.name}({card.points})"
             # 不再在卡牌前加“[孤]”标记
-            card_text = self.font.render(card_info, True, COLOR_TEXT)
+            card_text = self.font.render(card_info, True, COLOR_CARD_TEXT)
             self.screen.blit(card_text, (rect.x + 5, rect.y + 5))
 
             # 绘制技能名称：自动换行显示完整技能名，尽量在可用高度内展示
@@ -888,7 +1030,7 @@ class PygameUI:
                         wrapped_lines.append(seg)
                 # 绘制最终行
                 for j, line in enumerate(wrapped_lines):
-                    skill_text = self.small_font.render(line, True, COLOR_TEXT)
+                    skill_text = self.small_font.render(line, True, COLOR_CARD_TEXT)
                     self.screen.blit(skill_text, (rect.x + 5, line_y_start + j * line_h))
 
     def check_click_card(self, player: Player, x: int, y: int, zone: str = "hand") -> Optional[Card]:

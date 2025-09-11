@@ -67,8 +67,7 @@ class PygameUI:
         for c in cards:
             # 卡面主标题（含点数、孤立标识）决定卡宽
             text = f"{c.name}({c.points})"
-            if c.is_isolated:
-                text = f"[孤] {text}"
+            # 不再在卡牌前加“[孤]”标记
             # 使用实际渲染后的表面宽度，避免字体度量偏差导致截断
             text_surface = self.font.render(text, True, COLOR_TEXT)
             text_w = text_surface.get_width()
@@ -781,8 +780,7 @@ class PygameUI:
 
             # 绘制卡牌基本信息（卡名必须完整显示，卡片宽度已动态调整）
             card_info = f"{card.name}({card.points})"
-            if card.is_isolated:
-                card_info = f"[孤] {card_info}"
+            # 不再在卡牌前加“[孤]”标记
             card_text = self.font.render(card_info, True, COLOR_TEXT)
             self.screen.blit(card_text, (rect.x + 5, rect.y + 5))
 

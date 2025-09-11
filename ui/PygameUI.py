@@ -27,6 +27,8 @@ class PygameUI:
         ]
         self.font = pygame.font.SysFont(font_candidates, 24)
         self.small_font = pygame.font.SysFont(font_candidates, 16)
+        # 背景水印字号稍大一些，增强可见度但不过度抢眼
+        self.wm_font = pygame.font.SysFont(font_candidates, 32)
         self.clock = pygame.time.Clock()
 
         # 游戏状态
@@ -53,6 +55,8 @@ class PygameUI:
         self.card_height = 90
         self.card_spacing = 10   # 原为5，增大以避免遮挡
         self.card_left = 150
+        # 固定卡宽（每局开始时计算一次，之后不再改变）
+        self.fixed_card_width = None
 
         # 悬停提示（技能说明）
         self.hover_card = None            # 当前鼠标悬停的卡牌
@@ -61,20 +65,46 @@ class PygameUI:
         self.mouse_pos = (0, 0)           # 记录鼠标位置用于提示框定位
     
     def _build_card_rects(self, cards: List[Card], y: int) -> List[pygame.Rect]:
-        """根据卡名实际宽度为一行卡牌构建矩形列表，保证卡名完整显示。"""
+        """根据固定卡宽生成等宽矩形；若未固定，则按全卡池计算一次固定卡宽。"""
         rects: List[pygame.Rect] = []
+        if not cards:
+            return rects
+        # 若尚未固定卡宽：按全卡池（1..19）计算一次
+        self._ensure_fixed_card_width()
+        width: int = cast(int, self.fixed_card_width)
+
+        # 再按统一宽度生成每张卡的矩形
         x = self.card_left
-        for c in cards:
-            # 卡面主标题（含点数、孤立标识）决定卡宽
-            text = f"{c.name}({c.points})"
-            # 不再在卡牌前加“[孤]”标记
-            # 使用实际渲染后的表面宽度，避免字体度量偏差导致截断
-            text_surface = self.font.render(text, True, COLOR_TEXT)
-            text_w = text_surface.get_width()
-            width = max(self.card_width, text_w + 16)  # 左右预留更充足的 padding
+        for _ in cards:
             rects.append(pygame.Rect(x, y, width, self.card_height))
             x += width + self.card_spacing
         return rects
+
+    def _ensure_fixed_card_width(self) -> None:
+        """若未设置固定卡宽，则按全卡池（编号 1..19）计算一次并锁定。"""
+        if self.fixed_card_width is not None:
+            return
+        try:
+            from game.card_factory import create_card_by_number
+        except Exception:
+            # 兜底：如果无法导入工厂，则使用默认宽度
+            self.fixed_card_width = self.card_width
+            return
+        max_text_w = 0
+        for n in range(1, 20):
+            try:
+                c = create_card_by_number(n)
+            except Exception:
+                continue
+            text = f"{c.name}({c.points})"
+            text_surface = self.font.render(text, True, COLOR_TEXT)
+            max_text_w = max(max_text_w, text_surface.get_width())
+        self.fixed_card_width = max(self.card_width, max_text_w + 16)
+
+    def fix_card_width_for_round(self) -> None:
+        """供小局开始时调用：根据全卡池测量并锁定当局卡宽。"""
+        self.fixed_card_width = None
+        self._ensure_fixed_card_width()
 
     def compute_live_score(self, player: Player) -> int:
         """实时计算玩家当前分数（战场+孤立区点数和）。"""
@@ -708,7 +738,10 @@ class PygameUI:
 
     def draw_player_zones(self, player: Player, idx: int, is_current: bool) -> None:
         """绘制玩家区域"""
-        base_y = 50 + idx * (ZONE_HEIGHT * 3 + ZONE_MARGIN)
+        gap = ZONE_MARGIN
+        h_hand, h_battle, h_iso = HAND_HEIGHT, BATTLE_HEIGHT, ISO_HEIGHT
+        total_h = h_hand + h_battle + h_iso + gap * 2
+        base_y = 50 + idx * (total_h + 30)
         border_color = COLOR_CURRENT if is_current else COLOR_ZONE
         # 如果当前有选中卡牌且需要选择目标，显示玩家区域的可选状态
         if self.selected_card and self.gm and self.gm.current_player:
@@ -719,49 +752,102 @@ class PygameUI:
             # 不再高亮显示需要卡牌目标的玩家区域
 
         # 绘制玩家区域边框
-        pygame.draw.rect(self.screen, border_color,
-                        (140, base_y - 30, WINDOW_WIDTH - 280, ZONE_HEIGHT * 3 + 30), 2)
+        pygame.draw.rect(
+            self.screen,
+            border_color,
+            (140, base_y - 30, WINDOW_WIDTH - 280, total_h + 30),
+            2,
+        )
+
+        # 用细线分割三个区域（取间隙的中线位置）
+        x1, x2 = 140, WINDOW_WIDTH - 140
+        y_sep1 = base_y + h_hand + gap // 2
+        y_sep2 = base_y + h_hand + gap + h_battle + gap // 2
+        sep_color = (120, 120, 120)
+        pygame.draw.line(self.screen, sep_color, (x1, y_sep1), (x2, y_sep1), 1)
+        pygame.draw.line(self.screen, sep_color, (x1, y_sep2), (x2, y_sep2), 1)
 
         # 绘制各个区域
-        self.draw_zone("手牌", player.hand, player, "hand", base_y)
-        self.draw_zone("战场", player.battlefield_cards, player, "battlefield", base_y + ZONE_HEIGHT + 10)
-        self.draw_zone("孤立", player.isolated_cards, player, "isolated", base_y + (ZONE_HEIGHT + 10) * 2)
+        self.draw_zone("手牌", player.hand, player, "hand", base_y, h_hand)
+        self.draw_zone("战场", player.battlefield_cards, player, "battlefield", base_y + h_hand + gap, h_battle)
+        self.draw_zone("孤立", player.isolated_cards, player, "isolated", base_y + h_hand + gap + h_battle + gap, h_iso)
 
-        # 绘制玩家信息：分数使用实时分（战场+孤立区）
+        # 绘制玩家信息（在board左侧分行显示，避免遮挡牌）
         live_score = self.compute_live_score(player)
-        info_text = f"{player.name}  分数: {live_score}  胜局: {player.wins}"
-        name_text = self.font.render(info_text, True, COLOR_TEXT)
-        self.screen.blit(name_text, (20, base_y - 50))
+        info_x = 20
+        info_y = base_y - 20
+        name_surf = self.font.render(player.name, True, COLOR_TEXT)
+        score_surf = self.small_font.render(f"分数: {live_score}", True, COLOR_TEXT)
+        wins_surf = self.small_font.render(f"胜局: {player.wins}", True, COLOR_TEXT)
+        self.screen.blit(name_surf, (info_x, info_y))
+        self.screen.blit(score_surf, (info_x, info_y + 22))
+        self.screen.blit(wins_surf, (info_x, info_y + 42))
 
         # 如果是选中的目标，绘制高亮边框
         if player in self.target_list:
             highlight_color = (255, 0, 0) if player in self.enemy_list else (0, 255, 0)
-            pygame.draw.rect(self.screen, highlight_color,
-                           (140, base_y - 30, WINDOW_WIDTH - 280, ZONE_HEIGHT * 3 + 30), 4)
+            pygame.draw.rect(
+                self.screen,
+                highlight_color,
+                (140, base_y - 30, WINDOW_WIDTH - 280, total_h + 30),
+                4,
+            )
 
     def draw_log_panel(self) -> None:
         """在底部绘制一个日志框，显示最近的操作。"""
-        panel_height = 140
+        panel_height = 90
         panel_rect = pygame.Rect(0, WINDOW_HEIGHT - panel_height, WINDOW_WIDTH, panel_height)
         pygame.draw.rect(self.screen, (20, 20, 20), panel_rect)
         pygame.draw.rect(self.screen, (80, 80, 80), panel_rect, 2)
 
-        # 标题
-        title = self.font.render("操作记录", True, COLOR_TEXT)
-        self.screen.blit(title, (10, WINDOW_HEIGHT - panel_height + 10))
+        # 面板与按钮约束
+        panel_top = WINDOW_HEIGHT - panel_height
+        bottom_safe_y = WINDOW_HEIGHT - 70  # 按钮上沿之上留出安全距离
+        line_h = self.small_font.get_height() + 2
 
-        # 取最后 max_logs 条
+        # 在空间足够时绘制标题；不足则让出空间给日志
+        title_surface = self.small_font.render("操作记录", True, COLOR_TEXT)
+        title_h = title_surface.get_height()
+        # 预估最小需要高度：标题 + 一行日志
+        need_for_title_and_one = 8 + title_h + 4 + line_h
+        avail = bottom_safe_y - panel_top
+        draw_title = avail >= need_for_title_and_one
+
+        y_title = panel_top + 8
+        if draw_title:
+            self.screen.blit(title_surface, (10, y_title))
+            logs_top = y_title + title_h + 4
+        else:
+            logs_top = panel_top + 6
+
+        # 取最后若干条日志，自底向上绘制，保证至少尝试一行
         lines = self.logs[-self.max_logs:]
-        # 从底部向上画
+        if not lines:
+            return
+        # 从底部向上画，直到触达 logs_top
+        drawn = 0
         for i, line in enumerate(reversed(lines)):
-            text_surface = self.font.render(line, True, COLOR_TEXT)
-            y = WINDOW_HEIGHT - 10 - (i + 1) * (text_surface.get_height() + 2)
+            text_surface = self.small_font.render(line, True, COLOR_TEXT)
+            y = bottom_safe_y - (i + 1) * line_h
+            if y < logs_top:
+                break
             self.screen.blit(text_surface, (10, y))
+            drawn += 1
+        # 如果一行都没画出来（空间极其有限），强制在 logs_top 位置画一行
+        if drawn == 0:
+            text_surface = self.small_font.render(lines[-1], True, COLOR_TEXT)
+            self.screen.blit(text_surface, (10, logs_top))
 
-    def draw_zone(self, label: str, cards: List[Card], player: Player, zone_name: str, y: int) -> None:
-        """绘制卡牌区域"""
-        title = self.font.render(label, True, COLOR_TEXT)
-        self.screen.blit(title, (150, y - 20))
+    def draw_zone(self, label: str, cards: List[Card], player: Player, zone_name: str, y: int, height: int = ZONE_HEIGHT) -> None:
+        """绘制卡牌区域（背景水印 + 卡牌）"""
+        # 背景水印文字（低透明度）
+        zone_rect = pygame.Rect(140, y, WINDOW_WIDTH - 280, height)
+        wm = self.wm_font.render(label, True, (200, 200, 200))
+        wm.set_alpha(40)
+        wm_x = zone_rect.x + (zone_rect.width - wm.get_width()) // 2
+        wm_y = zone_rect.y + (zone_rect.height - wm.get_height()) // 2
+        self.screen.blit(wm, (wm_x, wm_y))
+
         rects = self._build_card_rects(cards, y)
         for card, rect in zip(cards, rects):
             # 根据不同情况设置卡牌颜色
@@ -811,17 +897,20 @@ class PygameUI:
         :param zone: 要检查的区域，可以是 "hand"/"battlefield"/"isolated"
         """
         cards: List[Card] = []
-        base_y = 50 + player.index * (ZONE_HEIGHT * 3 + ZONE_MARGIN)
+        gap = ZONE_MARGIN
+        h_hand, h_battle, h_iso = HAND_HEIGHT, BATTLE_HEIGHT, ISO_HEIGHT
+        total_h = h_hand + h_battle + h_iso + gap * 2
+        base_y = 50 + player.index * (total_h + 30)
 
         if zone == "hand":
             cards = player.hand
             y_offset = 0
         elif zone == "battlefield":
             cards = player.battlefield_cards
-            y_offset = ZONE_HEIGHT + 10
+            y_offset = h_hand + gap
         elif zone == "isolated":
             cards = player.isolated_cards
-            y_offset = (ZONE_HEIGHT + 10) * 2
+            y_offset = h_hand + gap + h_battle + gap
         else:
             return None
 
@@ -835,10 +924,12 @@ class PygameUI:
         """检查是否点击到目标玩家区域"""
         if not self.gm:
             return None
-            
+        gap = ZONE_MARGIN
+        h_hand, h_battle, h_iso = HAND_HEIGHT, BATTLE_HEIGHT, ISO_HEIGHT
+        total_h = h_hand + h_battle + h_iso + gap * 2
         for player in self.gm.players:
-            rect = pygame.Rect(140, 50 + player.index * (ZONE_HEIGHT * 3 + ZONE_MARGIN) - 30,
-                             WINDOW_WIDTH - 280, ZONE_HEIGHT * 3 + 30)
+            base_y = 50 + player.index * (total_h + 30)
+            rect = pygame.Rect(140, base_y - 30, WINDOW_WIDTH - 280, total_h + 30)
             if rect.collidepoint(x, y):
                 return player
         return None
@@ -848,7 +939,10 @@ class PygameUI:
         
         :param zone: 要检查的区域，可以是 "hand"/"battlefield"/"isolated"
         """
-        base_y = 50 + player.index * (ZONE_HEIGHT * 3 + ZONE_MARGIN)
+        gap = ZONE_MARGIN
+        h_hand, h_battle, h_iso = HAND_HEIGHT, BATTLE_HEIGHT, ISO_HEIGHT
+        total_h = h_hand + h_battle + h_iso + gap * 2
+        base_y = 50 + player.index * (total_h + 30)
         
         # 确定要搜索的卡牌列表和纵向偏移
         if zone == "hand":
@@ -856,10 +950,10 @@ class PygameUI:
             y_offset = 0
         elif zone == "battlefield":
             cards = player.battlefield_cards
-            y_offset = ZONE_HEIGHT + 10
+            y_offset = h_hand + gap
         elif zone == "isolated":
             cards = player.isolated_cards
-            y_offset = (ZONE_HEIGHT + 10) * 2
+            y_offset = h_hand + gap + h_battle + gap
         else:
             return None
 

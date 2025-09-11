@@ -62,6 +62,9 @@ class GameManager:
     def play_small_round(self, ui):
         """运行一个小局"""
         self.start_small_round()
+        # 开局时锁定当局卡面固定宽度
+        if hasattr(ui, 'fix_card_width_for_round'):
+            ui.fix_card_width_for_round()
         # 本小局的先手由 starting_player_index 决定
         self.current_player_index = self.starting_player_index
         players_done = [False] * len(self.players)

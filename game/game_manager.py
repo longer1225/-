@@ -12,6 +12,8 @@ class GameManager:
         self.current_round = 0
         self.board = None
         self.current_player_index = 0
+        # 小局起手玩家索引（每小局轮换起手）
+        self.starting_player_index = 0
         self.reset_scores()  # 初始化得分记录
 
     def reset_scores(self):
@@ -60,7 +62,8 @@ class GameManager:
     def play_small_round(self, ui):
         """运行一个小局"""
         self.start_small_round()
-        self.current_player_index = 0
+        # 本小局的先手由 starting_player_index 决定
+        self.current_player_index = self.starting_player_index
         players_done = [False] * len(self.players)
 
         while not all(players_done):
@@ -139,6 +142,9 @@ class GameManager:
 
         # 小局全部玩家回合结束后结算
         winners = self.end_small_round()
+        # 下一小局轮到下一个玩家先手
+        if len(self.players) > 0:
+            self.starting_player_index = (self.starting_player_index + 1) % len(self.players)
         return winners
 
 
@@ -194,6 +200,7 @@ class GameManager:
         """重置大局状态"""
         self.current_round = 0
         self.current_player_index = 0
+        self.starting_player_index = 0
         self.reset_scores()  # 使用统一的重置得分方法
         for p in self.players:
             p.reset_all()

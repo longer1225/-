@@ -21,7 +21,7 @@ card_data_map = {
     13: {"points": 0, "is_isolated": False, "skills": [Skill_21()]},
     14: {"points": 0, "is_isolated": False, "skills": [Skill_23()]},
     15: {"points": -3, "is_isolated": False, "skills": [Skill_26()]},
-    16: {"points": 2, "is_isolated": False, "skills": [Skill_27()]},
+    16: {"points": -3, "is_isolated": False, "skills": [Skill_26()]},
     17: {"points": 2, "is_isolated": False, "skills": [Skill_28()]},
     18: {"points": 2, "is_isolated": False, "skills": [Skill_29()]},
     19:{"points": -1, "is_isolated": True, "skills": [Skill_35()]}

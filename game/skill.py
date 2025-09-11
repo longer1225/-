@@ -544,21 +544,32 @@ class Skill_29(Skill):
             print(msg)
 
 class Skill_35(Skill):
-    """打出这张牌放入孤立区，没有其他效果"""
+    """打出这张牌放入孤立区，同时玩家获得一张同名牌"""
     def __init__(self):
         super().__init__("孤立放置", targets_required=0, enemy_required=0, target_side="self", target_type="none")
 
     def apply(self, action):
         owner = action.owner
         card = action.self_card
+
         # 如果错误地在战场中，移除之
         if card in owner.battlefield_cards:
             owner.battlefield_cards.remove(card)
-        # 确保只在孤立区存在一次
+
+        # 放入孤立区（确保只存在一次）
         if card not in owner.isolated_cards:
             owner.isolated_cards.append(card)
-        msg = f"[{self.name}] {card.name} 被放入孤立区"
+
+        # 玩家再获得一张同名牌
+        try:
+            owner.hand.append(card)
+            msg = f"[{self.name}] {card.name} 被放入孤立区，同时 {owner.name} 获得一张同名牌 {card.name}"
+        except Exception:
+            # 如果实例化失败，则仅提示放入孤立区
+            msg = f"[{self.name}] {card.name} 被放入孤立区，但无法生成新牌"
+
         if getattr(action, 'ui', None):
             action.ui.add_log(msg)
         else:
             print(msg)
+

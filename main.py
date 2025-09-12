@@ -1,5 +1,3 @@
-
-
 import pygame
 import sys
 from game.game_manager import GameManager
@@ -13,6 +11,10 @@ def main():
     ui = PygameUI()
     gm = GameManager(players=[])
     ui.set_manager(gm)
+    
+    # 如果音乐加载成功，则开始播放
+    if ui.music_loaded:
+        pygame.mixer.music.play(-1)  # -1表示循环播放
 
     # 游戏主循环
     while ui.running:
@@ -25,6 +27,10 @@ def main():
 
         # ---------------- 游戏逻辑 ----------------
         elif ui.state == "game":
+            # 游戏中降低音乐音量
+            if ui.music_loaded:
+                pygame.mixer.music.set_volume(0.7)
+            
             # 将事件消费与界面刷新交给 GameManager/UI 的内部等待循环，避免重复消费事件
             if gm.current_round < gm.total_rounds:
                 winners = gm.play_small_round(ui)
@@ -43,6 +49,10 @@ def main():
         
         # ---------------- 结束界面逻辑 ----------------
         elif ui.state == "game_over":
+            # 结束界面恢复音乐音量
+            if ui.music_loaded:
+                pygame.mixer.music.set_volume(1.0)
+                
             ui.handle_events()
             ui.draw_game()
             ui.clock.tick(30)

@@ -75,7 +75,7 @@ class PygameUI:
         self.bg_image = None
         self.bg_scaled = None
         try:
-            bg_path = os.path.join(os.path.dirname(__file__), "images", "background.jpg")
+            bg_path = os.path.join(os.path.dirname(__file__), "images", "Background.jpg")
             if os.path.exists(bg_path):
                 self.bg_image = pygame.image.load(bg_path).convert()
         except Exception:
@@ -105,6 +105,17 @@ class PygameUI:
                     break
         except Exception:
             self.title_image = None
+
+        # 背景音乐
+        self.music_loaded = False
+        try:
+            # 音乐文件路径，待替换为实际音乐文件路径
+            music_path = os.path.join(os.path.dirname(__file__), "music", "background.mp3")
+            if os.path.exists(music_path):
+                pygame.mixer.music.load(music_path)
+                self.music_loaded = True
+        except Exception as e:
+            print(f"无法加载音乐: {e}")
 
         # 悬停提示（技能说明）
         self.hover_card = None            # 当前鼠标悬停的卡牌
@@ -557,7 +568,7 @@ class PygameUI:
         # 绘制文本
         ty = y + padding
         for seg in wrapped:
-            surf = self.small_font.render(seg, True, COLOR_TEXT)
+            surf = self.small_font.render(seg, True, (255, 255, 255))  # 白色字体
             self.screen.blit(surf, (x + padding, ty))
             ty += line_h
 
@@ -710,7 +721,7 @@ class PygameUI:
 
             # 绘制消息
             if self.message and self.message_timer > 0:
-                msg_surface = self.font.render(self.message, True, COLOR_TEXT)
+                msg_surface = self.font.render(self.message, True, (0, 0, 0))  # 黑色字体
                 self.screen.blit(msg_surface, (WINDOW_WIDTH // 2 - msg_surface.get_width() // 2, 10))
                 self.message_timer = max(0, self.message_timer - self.clock.get_time())
 
@@ -738,7 +749,7 @@ class PygameUI:
             banner = pygame.Surface((banner_rect.width, banner_rect.height), pygame.SRCALPHA)
             banner.fill((0, 0, 0, 120))
             self.screen.blit(banner, banner_rect.topleft)
-        title_big = self.title_font.render("萝卜牌", True, COLOR_TEXT)
+        title_big = self.title_font.render("萝卜牌", True, (0, 0, 0))  # 黑色字体
         self.screen.blit(title_big, (
             banner_rect.x + (banner_rect.width - title_big.get_width()) // 2,
             banner_rect.y + (banner_rect.height - title_big.get_height()) // 2,
@@ -746,7 +757,7 @@ class PygameUI:
 
         # 提示语下移
         prompt_y = banner_rect.bottom + 30
-        title = self.font.render("请选择玩家人数", True, COLOR_TEXT)
+        title = self.font.render("请选择玩家人数", True, (0, 0, 0))  # 黑色字体
         self.screen.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, prompt_y))
 
         # 仅显示“2人”按钮
@@ -761,22 +772,22 @@ class PygameUI:
     def draw_game_over(self) -> None:
         """绘制大局结束界面：比分、胜者、操作按钮"""
         # 标题
-        title = self.font.render("大局结束", True, COLOR_TEXT)
+        title = self.font.render("大局结束", True, (0, 0, 0))  # 黑色字体
         self.screen.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, 80))
 
         # 胜者
         winners_text = ", ".join(self.game_over_winners) if self.game_over_winners else "无"
-        winners_surface = self.font.render(f"胜利者: {winners_text}", True, COLOR_TEXT)
+        winners_surface = self.font.render(f"胜利者: {winners_text}", True, (0, 0, 0))  # 黑色字体
         self.screen.blit(winners_surface, (WINDOW_WIDTH // 2 - winners_surface.get_width() // 2, 140))
 
         # 大比分（小局胜场）
         if self.gm:
             y = 200
-            score_title = self.font.render("比分（小局胜场）:", True, COLOR_TEXT)
+            score_title = self.font.render("比分（小局胜场）:", True, (0, 0, 0))  # 黑色字体
             self.screen.blit(score_title, (WINDOW_WIDTH // 2 - score_title.get_width() // 2, y))
             y += 40
             for name, wins in self.gm.small_rounds_won.items():
-                line = self.font.render(f"{name}: {wins}", True, COLOR_TEXT)
+                line = self.font.render(f"{name}: {wins}", True, (0, 0, 0))  # 黑色字体
                 self.screen.blit(line, (WINDOW_WIDTH // 2 - line.get_width() // 2, y))
                 y += 30
 
@@ -809,7 +820,7 @@ class PygameUI:
 
         # 文字
         use_font = font or self.font
-        label = use_font.render(text, True, COLOR_BTN_TEXT)
+        label = use_font.render(text, True, (0, 0, 0))  # 黑色字体
         text_x = rect.x + (rect.width - label.get_width()) // 2
         text_y = rect.y + (rect.height - label.get_height()) // 2
         self.screen.blit(label, (text_x, text_y))
@@ -854,7 +865,7 @@ class PygameUI:
         h_hand, h_battle, h_iso = HAND_HEIGHT, BATTLE_HEIGHT, ISO_HEIGHT
         total_h = h_hand + h_battle + h_iso + gap * 2
         base_y = 50 + idx * (total_h + 30)
-        border_color = COLOR_CURRENT if is_current else COLOR_ZONE
+        border_color = COLOR_CURRENT_PLAYER if is_current else COLOR_OTHER_PLAYER
         # 如果当前有选中卡牌且需要选择目标，显示玩家区域的可选状态
         if self.selected_card and self.gm and self.gm.current_player:
             current_player = self.gm.current_player
@@ -863,13 +874,9 @@ class PygameUI:
                 border_color = (200, 100, 100)  # 红色表示可以选择为目标
             # 不再高亮显示需要卡牌目标的玩家区域
 
-        # 绘制玩家区域边框
-        pygame.draw.rect(
-            self.screen,
-            border_color,
-            (140, base_y - 30, WINDOW_WIDTH - 280, total_h + 30),
-            2,
-        )
+        # 绘制玩家区域圆角边框
+        player_rect = pygame.Rect(140, base_y - 30, WINDOW_WIDTH - 280, total_h + 30)
+        pygame.draw.rect(self.screen, border_color, player_rect, 3, border_radius=12)
 
         # 用细线分割三个区域（取间隙的中线位置）
         x1, x2 = 140, WINDOW_WIDTH - 140
@@ -888,9 +895,9 @@ class PygameUI:
         live_score = self.compute_live_score(player)
         info_x = 60
         info_y = base_y - 20
-        name_surf = self.font.render(player.name, True, COLOR_TEXT)
-        score_surf = self.small_font.render(f"分数: {live_score}", True, COLOR_TEXT)
-        wins_surf = self.small_font.render(f"胜局: {player.wins}", True, COLOR_TEXT)
+        name_surf = self.font.render(player.name, True, (0, 0, 0))  # 黑色字体
+        score_surf = self.small_font.render(f"分数: {live_score}", True, (0, 0, 0))  # 黑色字体
+        wins_surf = self.small_font.render(f"胜局: {player.wins}", True, (0, 0, 0))  # 黑色字体
         self.screen.blit(name_surf, (info_x, info_y))
         self.screen.blit(score_surf, (info_x, info_y + 22))
         self.screen.blit(wins_surf, (info_x, info_y + 42))
@@ -898,12 +905,8 @@ class PygameUI:
         # 如果是选中的目标，绘制高亮边框
         if player in self.target_list:
             highlight_color = (255, 0, 0) if player in self.enemy_list else (0, 255, 0)
-            pygame.draw.rect(
-                self.screen,
-                highlight_color,
-                (140, base_y - 30, WINDOW_WIDTH - 280, total_h + 30),
-                4,
-            )
+            pygame.draw.rect(self.screen, highlight_color, player_rect, 4, border_radius=12)
+
 
     def draw_log_panel(self) -> None:
         """在底部绘制一个日志框，显示最近的操作。"""
@@ -918,7 +921,7 @@ class PygameUI:
         line_h = self.small_font.get_height() + 2
 
         # 在空间足够时绘制标题；不足则让出空间给日志
-        title_surface = self.small_font.render("操作记录", True, COLOR_TEXT)
+        title_surface = self.small_font.render("操作记录", True, (255, 255, 255))  # 白色字体
         title_h = title_surface.get_height()
         # 预估最小需要高度：标题 + 一行日志
         need_for_title_and_one = 8 + title_h + 4 + line_h
@@ -939,7 +942,7 @@ class PygameUI:
         # 从底部向上画，直到触达 logs_top
         drawn = 0
         for i, line in enumerate(reversed(lines)):
-            text_surface = self.small_font.render(line, True, COLOR_TEXT)
+            text_surface = self.small_font.render(line, True, (255, 255, 255))  # 白色字体
             y = bottom_safe_y - (i + 1) * line_h
             if y < logs_top:
                 break
@@ -947,15 +950,15 @@ class PygameUI:
             drawn += 1
         # 如果一行都没画出来（空间极其有限），强制在 logs_top 位置画一行
         if drawn == 0:
-            text_surface = self.small_font.render(lines[-1], True, COLOR_TEXT)
+            text_surface = self.small_font.render(lines[-1], True, (255, 255, 255))  # 白色字体
             self.screen.blit(text_surface, (10, logs_top))
 
     def draw_zone(self, label: str, cards: List[Card], player: Player, zone_name: str, y: int, height: int = ZONE_HEIGHT) -> None:
         """绘制卡牌区域（仅大号水印 + 卡牌）"""
         zone_rect = pygame.Rect(140, y, WINDOW_WIDTH - 280, height)
 
-        # 中心水印（放大字号、低透明度）
-        wm = self.wm_font.render(label, True, (220, 220, 220))
+        # 中心水印（放大字号、低透明度）- 改为黑色
+        wm = self.wm_font.render(label, True, (0, 0, 0))  # 黑色字体
         wm.set_alpha(40)
         wm_x = zone_rect.x + (zone_rect.width - wm.get_width()) // 2
         wm_y = zone_rect.y + (zone_rect.height - wm.get_height()) // 2
@@ -1009,7 +1012,7 @@ class PygameUI:
             # 绘制卡牌基本信息（卡名必须完整显示，卡片宽度已动态调整）
             card_info = f"{card.name}({card.points})"
             # 不再在卡牌前加“[孤]”标记
-            card_text = self.font.render(card_info, True, COLOR_CARD_TEXT)
+            card_text = self.font.render(card_info, True, (255, 255, 255))  # 白色字体
             self.screen.blit(card_text, (rect.x + 5, rect.y + 5))
 
             # 绘制技能名称：自动换行显示完整技能名，尽量在可用高度内展示
@@ -1030,7 +1033,7 @@ class PygameUI:
                         wrapped_lines.append(seg)
                 # 绘制最终行
                 for j, line in enumerate(wrapped_lines):
-                    skill_text = self.small_font.render(line, True, COLOR_CARD_TEXT)
+                    skill_text = self.small_font.render(line, True, (255, 255, 255))  # 白色字体
                     self.screen.blit(skill_text, (rect.x + 5, line_y_start + j * line_h))
 
     def check_click_card(self, player: Player, x: int, y: int, zone: str = "hand") -> Optional[Card]:

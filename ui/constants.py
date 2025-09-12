@@ -19,6 +19,8 @@ COLOR_CARD_TEXT = (0, 0, 0) #白色
 COLOR_HIGHLIGHT = (100, 100, 200)
 COLOR_CURRENT = (200, 200, 100)
 COLOR_BTN_TEXT = (0, 0, 0)  # 按钮文字颜色：黑色
+COLOR_CURRENT_PLAYER = (0, 0, 0)  # 黑色，用于当前出牌玩家边框
+COLOR_OTHER_PLAYER = (128, 128, 128)  # 灰色，用于其他非当前出牌玩家边框
 
 # 分区可视化增强（半透明色块与边框颜色）
 # 使用 RGBA（最后一位为 alpha，仅在采用带透明度的 Surface 时生效）

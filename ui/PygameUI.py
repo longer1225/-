@@ -28,6 +28,7 @@ class PygameUI:
         ]
         self.font = pygame.font.SysFont(font_candidates, 24)
         self.small_font = pygame.font.SysFont(font_candidates, 16)
+        self.player_info_font = pygame.font.SysFont(font_candidates, 20)  # 玩家信息专用字体
         # 背景水印字号放大以增强区域辨识度
         self.wm_font = pygame.font.SysFont(font_candidates, 40)
         # 主页大标题字体
@@ -879,12 +880,30 @@ class PygameUI:
         live_score = self.compute_live_score(player)
         info_x = 60
         info_y = base_y - 20
+        
+        # 增加行间距使显示更宽松
         name_surf = self.font.render(player.name, True, (255, 255, 255))  # 白色字体
         score_surf = self.small_font.render(f"分数: {live_score}", True, (255, 255, 255))  # 白色字体
         wins_surf = self.small_font.render(f"胜局: {player.wins}", True, (255, 255, 255))  # 白色字体
-        self.screen.blit(name_surf, (info_x, info_y))
-        self.screen.blit(score_surf, (info_x, info_y + 22))
-        self.screen.blit(wins_surf, (info_x, info_y + 42))
+        
+        # 计算玩家信息区域的尺寸和位置，使文本在框内居中
+        max_text_width = max(name_surf.get_width(), score_surf.get_width(), wins_surf.get_width())
+        info_width = max_text_width + 20
+        info_height = 90  # 增加高度以适应宽松的行间距
+        info_rect = pygame.Rect(info_x - 10, info_y - 10, info_width, info_height)
+        
+        # 绘制黄色圆角边框
+        pygame.draw.rect(self.screen, (255, 255, 0), info_rect, 2, border_radius=8)  # 黄色边框
+        
+        # 计算居中的文本位置
+        name_x = info_rect.centerx - name_surf.get_width() // 2
+        score_x = info_rect.centerx - score_surf.get_width() // 2
+        wins_x = info_rect.centerx - wins_surf.get_width() // 2
+        
+        # 绘制玩家信息文本（居中显示）
+        self.screen.blit(name_surf, (name_x, info_y))
+        self.screen.blit(score_surf, (score_x, info_y + 30))  # 增加行间距
+        self.screen.blit(wins_surf, (wins_x, info_y + 60))   # 增加行间距
 
         # 如果是选中的目标，绘制高亮边框
         if player in self.target_list:

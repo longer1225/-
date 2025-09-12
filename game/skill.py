@@ -76,7 +76,7 @@ class Skill_1(Skill):
 
     def apply(self, action):
         cards_on_board = action.board.get_player_zone(action.owner, "battlefield")
-        action.self_card.points += len(cards_on_board)
+        action.self_card.points += len(cards_on_board)-1
         msg = f"[{self.name}] {action.self_card.name} 点数增加到 {action.self_card.points}"
         if getattr(action, 'ui', None):
             action.ui.add_log(msg)

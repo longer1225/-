@@ -65,7 +65,7 @@ class PygameUI:
         self.card_bg = None
         self.card_bg_scaled = None
         try:
-            img_path = os.path.join(os.path.dirname(__file__), "images", "card.jpg")
+            img_path = os.path.join(os.path.dirname(__file__), "images", "card.png")
             if os.path.exists(img_path):
                 self.card_bg = pygame.image.load(img_path).convert_alpha()
         except Exception:
@@ -84,7 +84,7 @@ class PygameUI:
         # 通用按钮背景图
         self.btn_image = None
         try:
-            btn_path = os.path.join(os.path.dirname(__file__), "images", "botton.jpg")
+            btn_path = os.path.join(os.path.dirname(__file__), "images", "botton.png")
             if os.path.exists(btn_path):
                 self.btn_image = pygame.image.load(btn_path).convert_alpha()
         except Exception:

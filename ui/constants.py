@@ -15,7 +15,7 @@ COLOR_BG = (30, 30, 30)
 COLOR_ZONE = (60, 60, 60)
 COLOR_TEXT = (220, 220, 220)
 # 卡面文字使用更高对比度的颜色（更接近纯白，保证可读性）
-COLOR_CARD_TEXT = (178, 34, 34)  # 暗红色（FireBrick）
+COLOR_CARD_TEXT = (0, 0, 0) #白色
 COLOR_HIGHLIGHT = (100, 100, 200)
 COLOR_CURRENT = (200, 200, 100)
 COLOR_BTN_TEXT = (0, 0, 0)  # 按钮文字颜色：黑色

@@ -75,7 +75,7 @@ class PygameUI:
         self.bg_image = None
         self.bg_scaled = None
         try:
-            bg_path = os.path.join(os.path.dirname(__file__), "images", "Background.jpg")
+            bg_path = os.path.join(os.path.dirname(__file__), "images", "Background.png")
             if os.path.exists(bg_path):
                 self.bg_image = pygame.image.load(bg_path).convert()
         except Exception:
@@ -736,24 +736,8 @@ class PygameUI:
         """绘制菜单界面（仅显示“2人”按钮，隐藏 3/4 人）"""
         # 顶部大标题“萝卜牌”与标题背景板
         banner_rect = pygame.Rect(WINDOW_WIDTH // 2 - 360, 80, 720, 120)
-        # 优先使用图片作为标题背景；无图时退回半透明底
-        if self.title_image:
-            try:
-                banner_img = pygame.transform.smoothscale(self.title_image, (banner_rect.width, banner_rect.height))
-                self.screen.blit(banner_img, banner_rect.topleft)
-            except Exception:
-                banner = pygame.Surface((banner_rect.width, banner_rect.height), pygame.SRCALPHA)
-                banner.fill((0, 0, 0, 120))
-                self.screen.blit(banner, banner_rect.topleft)
-        else:
-            banner = pygame.Surface((banner_rect.width, banner_rect.height), pygame.SRCALPHA)
-            banner.fill((0, 0, 0, 120))
-            self.screen.blit(banner, banner_rect.topleft)
-        title_big = self.title_font.render("萝卜牌", True, (0, 0, 0))  # 黑色字体
-        self.screen.blit(title_big, (
-            banner_rect.x + (banner_rect.width - title_big.get_width()) // 2,
-            banner_rect.y + (banner_rect.height - title_big.get_height()) // 2,
-        ))
+       
+        
 
         # 提示语下移
         prompt_y = banner_rect.bottom + 30
@@ -895,9 +879,9 @@ class PygameUI:
         live_score = self.compute_live_score(player)
         info_x = 60
         info_y = base_y - 20
-        name_surf = self.font.render(player.name, True, (0, 0, 0))  # 黑色字体
-        score_surf = self.small_font.render(f"分数: {live_score}", True, (0, 0, 0))  # 黑色字体
-        wins_surf = self.small_font.render(f"胜局: {player.wins}", True, (0, 0, 0))  # 黑色字体
+        name_surf = self.font.render(player.name, True, (255, 255, 255))  # 白色字体
+        score_surf = self.small_font.render(f"分数: {live_score}", True, (255, 255, 255))  # 白色字体
+        wins_surf = self.small_font.render(f"胜局: {player.wins}", True, (255, 255, 255))  # 白色字体
         self.screen.blit(name_surf, (info_x, info_y))
         self.screen.blit(score_surf, (info_x, info_y + 22))
         self.screen.blit(wins_surf, (info_x, info_y + 42))

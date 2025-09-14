@@ -737,8 +737,8 @@ class PygameUI:
         if rect_4p.collidepoint(x, y):
             self.selected_num = 4
 
-        # 开始游戏
-        start_rect = pygame.Rect(WINDOW_WIDTH // 2 - 160, first_btn_y + 4 * 76 + 30, 320, 90)
+        # 开始游戏（与 draw_menu 中的按钮位置保持一致）
+        start_rect = pygame.Rect(WINDOW_WIDTH // 2 - 160, first_btn_y + 3 * 76 + 30, 320, 90)
         if start_rect.collidepoint(x, y) and self.selected_num and self.gm:
             self.gm.players = [Player(f"玩家{i+1}", i) for i in range(self.selected_num)]
             self.gm.setup_board()

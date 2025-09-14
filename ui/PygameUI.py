@@ -891,24 +891,9 @@ class PygameUI:
         """绘制菜单界面（显示 2/3 人选项，包含标题横幅）"""
         # 顶部大标题“萝卜牌”与标题背景板
         banner_rect = pygame.Rect(WINDOW_WIDTH // 2 - 360, 80, 720, 120)
-        # 标题背景图或半透明横幅
-        if self.title_image:
-            try:
-                scaled = pygame.transform.smoothscale(self.title_image, (banner_rect.width, banner_rect.height))
-                self.screen.blit(scaled, banner_rect.topleft)
-            except Exception:
-                overlay = pygame.Surface((banner_rect.width, banner_rect.height), pygame.SRCALPHA)
-                overlay.fill((0, 0, 0, 90))
-                self.screen.blit(overlay, banner_rect.topleft)
-        else:
-            overlay = pygame.Surface((banner_rect.width, banner_rect.height), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 90))
-            self.screen.blit(overlay, banner_rect.topleft)
+        # 已移除标题背景图与半透明横幅（保留 banner_rect 仅用于计算按钮位置，不改变按钮布局）
 
-        # 大标题文字
-        title_text = self.title_font.render("萝卜牌", True, (255, 255, 255))
-        self.screen.blit(title_text, (banner_rect.centerx - title_text.get_width() // 2,
-                                      banner_rect.centery - title_text.get_height() // 2))
+    # （已去除大标题文字与背景横幅，仅保留按钮区域）
 
         # 提示语下移
         prompt_y = banner_rect.bottom + 30

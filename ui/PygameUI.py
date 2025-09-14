@@ -230,105 +230,103 @@ class PygameUI:
             return default_rect, base_y, 140, WINDOW_WIDTH - 140, 150
 
         n = len(self.gm.players)
-
-        if n == 3:
-            # 三人"品"字布局
-            M_top = 160   # 顶部左右边距
-            G_top = 180   # 顶部两列估算间距（仅用于顶部宽度估算）
-            col_w_baseline = (WINDOW_WIDTH - 2 * M_top - G_top) // 2
-
-            top_base_y = 80
-            bottom_base_y = top_base_y + area_height + 50
-
-            # 顶部玩家（index 0）保持基准宽度并居中
-            if player.index == 0:
-                x = M_top + ((2 * col_w_baseline + G_top) - col_w_baseline) // 2
-                area_rect = pygame.Rect(x, top_base_y - 30, col_w_baseline, area_height)
-                base_y = top_base_y
-            else:
-                # 底部两位玩家：根据手牌需求动态分配左右区域宽度，并整体稍向左移
-                M_bottom = 120    # 底部左右边距（更小，整体更靠左）
-                min_gap = 140     # 左右区域之间至少保留的间距，避免遮挡
-                min_side = max(260, col_w_baseline)  # 每侧最小宽度
-
-                def hand_required_width(p: Player) -> int:
-                    self._ensure_fixed_card_width()
-                    w_each = int(cast(int, self.fixed_card_width)) if self.fixed_card_width else self.card_width
-                    cnt = len(getattr(p, 'hand', []))
-                    total = cnt * w_each + max(0, cnt - 1) * self.card_spacing
-                    return area_pad * 2 + total + 10
-
-                p_left = self.gm.players[1]
-                p_right = self.gm.players[2]
-                req_left = max(min_side, hand_required_width(p_left))
-                req_right = max(min_side, hand_required_width(p_right))
-
-                avail = WINDOW_WIDTH - 2 * M_bottom - min_gap
-                if req_left + req_right <= avail:
-                    w_left, w_right = req_left, req_right
-                else:
-                    # 比例压缩，尽量保留相对比例
-                    scale = avail / max(1, (req_left + req_right))
-                    w_left = max(min_side, int(req_left * scale))
-                    w_right = max(min_side, avail - w_left)
-                    # 二次修正，防止某侧因四舍五入溢出
-                    if w_left + w_right > avail:
-                        w_right = avail - w_left
-
-                if player.index == 1:
-                    # 左侧从 M_bottom 开始向右
-                    area_rect = pygame.Rect(M_bottom, bottom_base_y - 30, w_left, area_height)
-                    base_y = bottom_base_y
-                else:
-                    # 右侧从右边界向左
-                    x_right = WINDOW_WIDTH - M_bottom - w_right
-                    area_rect = pygame.Rect(x_right, bottom_base_y - 30, w_right, area_height)
-                    base_y = bottom_base_y
-
-            x1 = area_rect.x
-            x2 = area_rect.x + area_rect.width
-            cards_x_left = area_rect.x + area_pad
-            return area_rect, base_y, x1, x2, cards_x_left
-        elif n == 4:
-            # 四人"田字格"布局
-            MARGIN = 120   # 左右边距
-            GAP = 140      # 中间间隙
-            COL_WIDTH = (WINDOW_WIDTH - 2 * MARGIN - GAP) // 2
-
-            ROW_HEIGHT = area_height + 30
-            TOP_Y = 100
-            BOTTOM_Y = TOP_Y + ROW_HEIGHT + 60
-
-            if player.index == 0:  # 左上
-                area_rect = pygame.Rect(MARGIN, TOP_Y - 30, COL_WIDTH, area_height)
-                base_y = TOP_Y
-            elif player.index == 1:  # 右上
-                area_rect = pygame.Rect(MARGIN + COL_WIDTH + GAP, TOP_Y - 30, COL_WIDTH, area_height)
-                base_y = TOP_Y
-            elif player.index == 2:  # 左下
-                area_rect = pygame.Rect(MARGIN, BOTTOM_Y - 30, COL_WIDTH, area_height)
-                base_y = BOTTOM_Y
-            else:  # 右下 (player.index == 3)
-                area_rect = pygame.Rect(MARGIN + COL_WIDTH + GAP, BOTTOM_Y - 30, COL_WIDTH, area_height)
-                base_y = BOTTOM_Y
-
-            # 确保区域不会超出屏幕边界
-            if area_rect.right > WINDOW_WIDTH - 20:
-                area_rect.width = WINDOW_WIDTH - area_rect.x - 20
-            if area_rect.bottom > WINDOW_HEIGHT - 20:
-                area_rect.height = WINDOW_HEIGHT - area_rect.y - 20
-
-            x1 = area_rect.x
-            x2 = area_rect.x + area_rect.width
-            cards_x_left = area_rect.x + area_pad
-            return area_rect, base_y, x1, x2, cards_x_left
-        else:
-
+        if n != 3 and n != 4:
             # 旧布局（纵向堆叠）
             base_y = 50 + player.index * (total_h + 30)
             area_rect = pygame.Rect(140, base_y - 30, WINDOW_WIDTH - 280, area_height)
             return area_rect, base_y, 140, WINDOW_WIDTH - 140, 150
 
+        # 三人“品”字布局
+        M_top = 140   # 顶部左右边距
+        G_top = 160   # 顶部两列估算间距（仅用于顶部宽度估算）
+        col_w_baseline = (WINDOW_WIDTH - 2 * M_top - G_top) // 2
+
+        top_base_y = 50
+        bottom_base_y = top_base_y + area_height + 40
+
+        # 公共：计算某玩家手牌所需的最小区域宽度
+        def hand_required_width(p: Player) -> int:
+            self._ensure_fixed_card_width()
+            w_each = int(cast(int, self.fixed_card_width)) if self.fixed_card_width else self.card_width
+            cnt = len(getattr(p, 'hand', []))
+            total = cnt * w_each + max(0, cnt - 1) * self.card_spacing
+            return area_pad * 2 + total + 10
+
+        # 顶部玩家（index 0）：也根据手牌尽量加宽，限制在顶部边距内，并水平居中
+        if n == 4:
+            # 四人“田”字布局：两行两列，等宽分布
+            M = 140
+            Gx = 40  # 列间距
+            Gy = 40  # 行间距
+            col_w = (WINDOW_WIDTH - 2 * M - Gx) // 2
+            row_top_y = 50
+            row_bottom_y = row_top_y + area_height + Gy
+
+            if player.index == 0:
+                x = M
+                y0 = row_top_y
+            elif player.index == 1:
+                x = M + col_w + Gx
+                y0 = row_top_y
+            elif player.index == 2:
+                x = M
+                y0 = row_bottom_y
+            else:
+                x = M + col_w + Gx
+                y0 = row_bottom_y
+            area_rect = pygame.Rect(x, y0 - 30, col_w, area_height)
+            base_y = y0
+        elif player.index == 0:
+            max_top_w = WINDOW_WIDTH - 2 * M_top
+            need_top = max(col_w_baseline, hand_required_width(self.gm.players[0]))
+            top_w = min(max_top_w, need_top)
+            x = (WINDOW_WIDTH - top_w) // 2
+            area_rect = pygame.Rect(x, top_base_y - 30, top_w, area_height)
+            base_y = top_base_y
+        else:
+            # 底部两位玩家：根据手牌需求动态分配左右区域宽度，并整体稍向左移
+            M_bottom = 100    # 底部左右边距（更小，整体更靠左）
+            min_gap = 120     # 左右区域之间至少保留的间距，避免遮挡
+            min_side = max(260, col_w_baseline)  # 每侧最小宽度
+
+            def hand_required_width(p: Player) -> int:
+                self._ensure_fixed_card_width()
+                w_each = int(cast(int, self.fixed_card_width)) if self.fixed_card_width else self.card_width
+                cnt = len(getattr(p, 'hand', []))
+                total = cnt * w_each + max(0, cnt - 1) * self.card_spacing
+                return area_pad * 2 + total + 10
+
+            p_left = self.gm.players[1]
+            p_right = self.gm.players[2]
+            req_left = max(min_side, hand_required_width(p_left))
+            req_right = max(min_side, hand_required_width(p_right))
+
+            avail = WINDOW_WIDTH - 2 * M_bottom - min_gap
+            if req_left + req_right <= avail:
+                w_left, w_right = req_left, req_right
+            else:
+                # 比例压缩，尽量保留相对比例
+                scale = avail / max(1, (req_left + req_right))
+                w_left = max(min_side, int(req_left * scale))
+                w_right = max(min_side, avail - w_left)
+                # 二次修正，防止某侧因四舍五入溢出
+                if w_left + w_right > avail:
+                    w_right = avail - w_left
+
+            if player.index == 1:
+                # 左侧从 M_bottom 开始向右
+                area_rect = pygame.Rect(M_bottom, bottom_base_y - 30, w_left, area_height)
+                base_y = bottom_base_y
+            else:
+                # 右侧从右边界向左
+                x_right = WINDOW_WIDTH - M_bottom - w_right
+                area_rect = pygame.Rect(x_right, bottom_base_y - 30, w_right, area_height)
+                base_y = bottom_base_y
+
+        x1 = area_rect.x
+        x2 = area_rect.x + area_rect.width
+        cards_x_left = area_rect.x + area_pad
+        return area_rect, base_y, x1, x2, cards_x_left
 
     def set_manager(self, gm: GameManager) -> None:
         """设置游戏管理器"""
@@ -724,7 +722,9 @@ class PygameUI:
     def handle_menu_click(self, x: int, y: int) -> None:
         """处理菜单点击"""
         # 与 draw_menu 中的位置保持一致
-        first_btn_y = WINDOW_HEIGHT // 2 - 90  # 2人按钮居中
+        banner_rect = pygame.Rect(WINDOW_WIDTH // 2 - 360, 80, 720, 120)
+        prompt_y = banner_rect.bottom + 30
+        first_btn_y = prompt_y + 60
         rect_2p = pygame.Rect(WINDOW_WIDTH // 2 - 90, first_btn_y, 180, 60)
         if rect_2p.collidepoint(x, y):
             self.selected_num = 2
@@ -888,16 +888,35 @@ class PygameUI:
         pygame.display.flip()
 
     def draw_menu(self) -> None:
-        """绘制菜单界面（显示 2/3/4 人选项）"""
-        # 提示语
-        prompt_y = WINDOW_HEIGHT // 2 - 150  # 将提示语放在窗口中间偏上位置
+        """绘制菜单界面（显示 2/3 人选项，包含标题横幅）"""
+        # 顶部大标题“萝卜牌”与标题背景板
+        banner_rect = pygame.Rect(WINDOW_WIDTH // 2 - 360, 80, 720, 120)
+        # 标题背景图或半透明横幅
+        if self.title_image:
+            try:
+                scaled = pygame.transform.smoothscale(self.title_image, (banner_rect.width, banner_rect.height))
+                self.screen.blit(scaled, banner_rect.topleft)
+            except Exception:
+                overlay = pygame.Surface((banner_rect.width, banner_rect.height), pygame.SRCALPHA)
+                overlay.fill((0, 0, 0, 90))
+                self.screen.blit(overlay, banner_rect.topleft)
+        else:
+            overlay = pygame.Surface((banner_rect.width, banner_rect.height), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 90))
+            self.screen.blit(overlay, banner_rect.topleft)
+
+        # 大标题文字
+        title_text = self.title_font.render("萝卜牌", True, (255, 255, 255))
+        self.screen.blit(title_text, (banner_rect.centerx - title_text.get_width() // 2,
+                                      banner_rect.centery - title_text.get_height() // 2))
+
+        # 提示语下移
+        prompt_y = banner_rect.bottom + 30
         title = self.font.render("请选择玩家人数", True, (0, 0, 0))  # 黑色字体
         self.screen.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, prompt_y))
 
-
-        # 显示"2人/3人/4人"按钮，使2人按钮位于窗口中间偏下位置
-        first_btn_y = WINDOW_HEIGHT // 2 - 90  # 2人按钮居中
-
+        # 显示“2人/3人/4人”按钮
+        first_btn_y = prompt_y + 60
         rect_2p = pygame.Rect(WINDOW_WIDTH // 2 - 90, first_btn_y, 180, 60)
         self._draw_btn(rect_2p, "2人", enabled=True, border=(self.selected_num == 2))
         rect_3p = pygame.Rect(WINDOW_WIDTH // 2 - 90, first_btn_y + 76, 180, 60)
@@ -905,10 +924,8 @@ class PygameUI:
         rect_4p = pygame.Rect(WINDOW_WIDTH // 2 - 90, first_btn_y + 2 * 76, 180, 60)
         self._draw_btn(rect_4p, "4人", enabled=True, border=(self.selected_num == 4))
 
-
-        # "开始游戏"按钮
-        start_rect = pygame.Rect(WINDOW_WIDTH // 2 - 160, first_btn_y + 3 * 76 + 30, 320, 90)
-
+        # “开始游戏”按钮
+        start_rect = pygame.Rect(WINDOW_WIDTH // 2 - 160, first_btn_y + 4 * 76 + 30, 320, 90)
         self._draw_btn(start_rect, "开始游戏", enabled=bool(self.selected_num))
 
     def draw_game_over(self) -> None:
@@ -1016,10 +1033,6 @@ class PygameUI:
                 # 对于需要选择敌方的卡牌，其他玩家区域显示为红色
                 border_color = (200, 100, 100)  # 红色表示可以选择为目标
 
-        # 如果是当前玩家的回合，将边框设为黄色
-        if is_current:
-            border_color = (255, 255, 0)  # 黄色
-
         # 绘制玩家区域圆角边框
         pygame.draw.rect(self.screen, border_color, area_rect, 3, border_radius=12)
 
@@ -1045,73 +1058,41 @@ class PygameUI:
         info_width = max_text_width + 20
         info_height = 90
 
-
-        # 根据玩家数量选择不同的布局方式：
-        # 1. 三人布局下按需求摆放得分块：
-        #   1号玩家（index 0）：显示在其 board 左边
-        #   2号玩家（index 1）：显示在其 board 左上
-        #   3号玩家（index 2）：显示在其 board 右上
-        # 2. 四人布局下按需求摆放得分块：
-        #   1号玩家（index 0）：显示在其 board 左上
-        #   2号玩家（index 1）：显示在其 board 右上
-        #   3号玩家（index 2）：显示在其 board 左下
-        #   4号玩家（index 3）：显示在其 board 右下
-        if self.gm:
-            num_players = len(self.gm.players)
-            if num_players == 3:
-                if player.index == 0:
-                    # 左侧，顶部对齐区域上边
-                    info_x = area_rect.x - info_width - 15
-                    info_y = area_rect.top
-                    if info_x < 15:
-                        info_x = 15
-                elif player.index == 1:
-                    # 左上：在区域上方，靠左对齐
-                    info_x = area_rect.x
-                    info_y = area_rect.top - info_height - 10
-                else:
-                    # 右上：在区域上方，靠右对齐
-                    info_x = area_rect.right - info_width
-                    info_y = area_rect.top - info_height - 10
-            elif num_players == 4:
-                if player.index == 0:
-                    # 左上：在区域上方，靠左对齐
-                    info_x = area_rect.x
-                    info_y = area_rect.top - info_height - 10
-                elif player.index == 1:
-                    # 右上：在区域上方，靠右对齐
-                    info_x = area_rect.right - info_width
-                    info_y = area_rect.top - info_height - 10
-                elif player.index == 2:
-                    # 左下：也在区域上方，但位置靠左下区域的上方
-                    info_x = area_rect.x
-                    info_y = area_rect.top - info_height - 10
-                else:
-                    # 右下：也在区域上方，但位置靠右下区域的上方
-                    info_x = area_rect.right - info_width
-                    info_y = area_rect.top - info_height - 10
-                
-                # 确保信息区域不会超出屏幕边界
-
+        # 三人布局下按需求摆放得分块：
+        # 1号玩家（index 0）：显示在其 board 左边
+        # 2号玩家（index 1）：显示在其 board 左上
+        # 3号玩家（index 2）：显示在其 board 右上
+        # 四人布局：所有玩家的得分块统一显示在各自 board 左侧
+        if self.gm and len(self.gm.players) == 3:
+            if player.index == 0:
+                # 左侧，顶部对齐区域上边
+                info_x = area_rect.x - info_width - 10
+                info_y = area_rect.top
                 if info_x < 10:
                     info_x = 10
-                elif info_x + info_width > WINDOW_WIDTH - 10:
-                    info_x = WINDOW_WIDTH - info_width - 10
-                    
-                if info_y < 10:
-                    info_y = 10
-                elif info_y + info_height > WINDOW_HEIGHT - 10:
-                    info_y = WINDOW_HEIGHT - info_height - 10
+            elif player.index == 1:
+                # 左上：在区域上方，靠左对齐
+                info_x = area_rect.x
+                info_y = area_rect.top - info_height - 6
             else:
-
-                # 非三人或四人或无 GM：沿用通用布局（信息在左侧）
+                # 右上：在区域上方，靠右对齐
+                info_x = area_rect.right - info_width
+                info_y = area_rect.top - info_height - 6
+        elif self.gm and len(self.gm.players) == 4:
+            # 4人：2号与4号（index 1、3）在右侧，其余在左侧；均与区域顶部对齐
+            info_y = area_rect.top
+            if player.index in (1, 3):
+                info_x = area_rect.right + 10
+                # 防越界：若超出窗口右侧，则贴边
+                max_x = WINDOW_WIDTH - info_width - 10
+                if info_x > max_x:
+                    info_x = max_x
+            else:
                 info_x = area_rect.x - info_width - 10
-                info_y = base_y - 20
-
                 if info_x < 10:
                     info_x = 10
         else:
-            # 无 GM：沿用通用布局（信息在左侧）
+            # 非三人或无 GM：沿用通用布局（信息在左侧）
             info_x = area_rect.x - info_width - 10
             info_y = base_y - 20
             if info_x < 10:

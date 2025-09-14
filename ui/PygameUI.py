@@ -230,7 +230,7 @@ class PygameUI:
             return default_rect, base_y, 140, WINDOW_WIDTH - 140, 150
 
         n = len(self.gm.players)
-        if n != 3:
+        if n != 3 and n != 4:
             # 旧布局（纵向堆叠）
             base_y = 50 + player.index * (total_h + 30)
             area_rect = pygame.Rect(140, base_y - 30, WINDOW_WIDTH - 280, area_height)
@@ -244,10 +244,44 @@ class PygameUI:
         top_base_y = 50
         bottom_base_y = top_base_y + area_height + 40
 
-        # 顶部玩家（index 0）保持基准宽度并居中
-        if player.index == 0:
-            x = M_top + ((2 * col_w_baseline + G_top) - col_w_baseline) // 2
-            area_rect = pygame.Rect(x, top_base_y - 30, col_w_baseline, area_height)
+        # 公共：计算某玩家手牌所需的最小区域宽度
+        def hand_required_width(p: Player) -> int:
+            self._ensure_fixed_card_width()
+            w_each = int(cast(int, self.fixed_card_width)) if self.fixed_card_width else self.card_width
+            cnt = len(getattr(p, 'hand', []))
+            total = cnt * w_each + max(0, cnt - 1) * self.card_spacing
+            return area_pad * 2 + total + 10
+
+        # 顶部玩家（index 0）：也根据手牌尽量加宽，限制在顶部边距内，并水平居中
+        if n == 4:
+            # 四人“田”字布局：两行两列，等宽分布
+            M = 140
+            Gx = 40  # 列间距
+            Gy = 40  # 行间距
+            col_w = (WINDOW_WIDTH - 2 * M - Gx) // 2
+            row_top_y = 50
+            row_bottom_y = row_top_y + area_height + Gy
+
+            if player.index == 0:
+                x = M
+                y0 = row_top_y
+            elif player.index == 1:
+                x = M + col_w + Gx
+                y0 = row_top_y
+            elif player.index == 2:
+                x = M
+                y0 = row_bottom_y
+            else:
+                x = M + col_w + Gx
+                y0 = row_bottom_y
+            area_rect = pygame.Rect(x, y0 - 30, col_w, area_height)
+            base_y = y0
+        elif player.index == 0:
+            max_top_w = WINDOW_WIDTH - 2 * M_top
+            need_top = max(col_w_baseline, hand_required_width(self.gm.players[0]))
+            top_w = min(max_top_w, need_top)
+            x = (WINDOW_WIDTH - top_w) // 2
+            area_rect = pygame.Rect(x, top_base_y - 30, top_w, area_height)
             base_y = top_base_y
         else:
             # 底部两位玩家：根据手牌需求动态分配左右区域宽度，并整体稍向左移
@@ -698,9 +732,13 @@ class PygameUI:
         rect_3p = pygame.Rect(WINDOW_WIDTH // 2 - 90, first_btn_y + 76, 180, 60)
         if rect_3p.collidepoint(x, y):
             self.selected_num = 3
+        # 4人按钮
+        rect_4p = pygame.Rect(WINDOW_WIDTH // 2 - 90, first_btn_y + 2 * 76, 180, 60)
+        if rect_4p.collidepoint(x, y):
+            self.selected_num = 4
 
         # 开始游戏
-        start_rect = pygame.Rect(WINDOW_WIDTH // 2 - 160, first_btn_y + 3 * 76 + 30, 320, 90)
+        start_rect = pygame.Rect(WINDOW_WIDTH // 2 - 160, first_btn_y + 4 * 76 + 30, 320, 90)
         if start_rect.collidepoint(x, y) and self.selected_num and self.gm:
             self.gm.players = [Player(f"玩家{i+1}", i) for i in range(self.selected_num)]
             self.gm.setup_board()
@@ -877,15 +915,17 @@ class PygameUI:
         title = self.font.render("请选择玩家人数", True, (0, 0, 0))  # 黑色字体
         self.screen.blit(title, (WINDOW_WIDTH // 2 - title.get_width() // 2, prompt_y))
 
-        # 显示“2人/3人”按钮
+        # 显示“2人/3人/4人”按钮
         first_btn_y = prompt_y + 60
         rect_2p = pygame.Rect(WINDOW_WIDTH // 2 - 90, first_btn_y, 180, 60)
         self._draw_btn(rect_2p, "2人", enabled=True, border=(self.selected_num == 2))
         rect_3p = pygame.Rect(WINDOW_WIDTH // 2 - 90, first_btn_y + 76, 180, 60)
         self._draw_btn(rect_3p, "3人", enabled=True, border=(self.selected_num == 3))
+        rect_4p = pygame.Rect(WINDOW_WIDTH // 2 - 90, first_btn_y + 2 * 76, 180, 60)
+        self._draw_btn(rect_4p, "4人", enabled=True, border=(self.selected_num == 4))
 
         # “开始游戏”按钮
-        start_rect = pygame.Rect(WINDOW_WIDTH // 2 - 160, first_btn_y + 3 * 76 + 30, 320, 90)
+        start_rect = pygame.Rect(WINDOW_WIDTH // 2 - 160, first_btn_y + 4 * 76 + 30, 320, 90)
         self._draw_btn(start_rect, "开始游戏", enabled=bool(self.selected_num))
 
     def draw_game_over(self) -> None:
@@ -1022,6 +1062,7 @@ class PygameUI:
         # 1号玩家（index 0）：显示在其 board 左边
         # 2号玩家（index 1）：显示在其 board 左上
         # 3号玩家（index 2）：显示在其 board 右上
+        # 四人布局：所有玩家的得分块统一显示在各自 board 左侧
         if self.gm and len(self.gm.players) == 3:
             if player.index == 0:
                 # 左侧，顶部对齐区域上边
@@ -1037,6 +1078,19 @@ class PygameUI:
                 # 右上：在区域上方，靠右对齐
                 info_x = area_rect.right - info_width
                 info_y = area_rect.top - info_height - 6
+        elif self.gm and len(self.gm.players) == 4:
+            # 4人：2号与4号（index 1、3）在右侧，其余在左侧；均与区域顶部对齐
+            info_y = area_rect.top
+            if player.index in (1, 3):
+                info_x = area_rect.right + 10
+                # 防越界：若超出窗口右侧，则贴边
+                max_x = WINDOW_WIDTH - info_width - 10
+                if info_x > max_x:
+                    info_x = max_x
+            else:
+                info_x = area_rect.x - info_width - 10
+                if info_x < 10:
+                    info_x = 10
         else:
             # 非三人或无 GM：沿用通用布局（信息在左侧）
             info_x = area_rect.x - info_width - 10

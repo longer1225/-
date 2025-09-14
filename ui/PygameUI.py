@@ -1009,6 +1009,10 @@ class PygameUI:
                 # 对于需要选择敌方的卡牌，其他玩家区域显示为红色
                 border_color = (200, 100, 100)  # 红色表示可以选择为目标
 
+        # 如果是当前玩家的回合，将边框设为黄色
+        if is_current:
+            border_color = (255, 255, 0)  # 黄色
+
         # 绘制玩家区域圆角边框
         pygame.draw.rect(self.screen, border_color, area_rect, 3, border_radius=12)
 
